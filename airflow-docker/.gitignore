@@ -1,0 +1,9 @@
+.vscode/settings.json
+
+# Do not commit secrets
+.env
+__pycache__/
+*/__pycache__/
+*.pyc
+.venv/
+data/output/
