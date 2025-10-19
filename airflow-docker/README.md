@@ -14,24 +14,17 @@
 
 ## 🚀 Быстрый старт
 
-### 1. Клонирование и настройка
+### 1. Запуск стенда
 
 ```bash
 # Перейдите в директорию проекта
 cd airflow-docker
 
-# Создайте необходимые директории
-mkdir -p dags data/input data/output logs
-```
-
-### 2. Запуск стенда
-
-```bash
 # Запустите все сервисы
 docker-compose up -d
 ```
 
-### 3. Доступ к интерфейсам
+### 2. Доступ к интерфейсам
 
 - **Airflow UI**: http://localhost:8080
   - Логин: `admin`
@@ -42,7 +35,7 @@ docker-compose up -d
   - Пользователь: `student`
   - Пароль: `student`
 
-- **PostgreSQL для метаданных Airflow**: `localhost:5434`
+- **PostgreSQL для метаданных Airflow**: `localhost:5433`
   - База данных: `airflow`
   - Пользователь: `airflow`
   - Пароль: `airflow`
@@ -82,7 +75,9 @@ airflow-docker/
 │   ├── hello_world_dag.py      # Базовый пример
 │   ├── sql_basic_dag.py       # Работа с SQL
 │   ├── file_operations_dag.py # Обработка файлов
-│   └── data_processing_dag.py # ETL пайплайн
+│   ├── data_processing_dag.py # ETL пайплайн
+│   ├── branching_dag.py        # Условная логика
+│   └── error_handling_dag.py   # Обработка ошибок
 ├── data/                       # Данные для упражнений
 │   ├── input/                  # Входные данные
 │   └── output/                 # Результаты обработки
@@ -132,19 +127,32 @@ airflow-docker/
 Все переменные захардкожены для простоты:
 
 ```env
-# Airflow
+# Airflow Configuration
 AIRFLOW_USER=admin
 AIRFLOW_PASSWORD=admin
 
-# PostgreSQL для метаданных Airflow
-POSTGRES_USER=airflow
-POSTGRES_PASSWORD=airflow
-POSTGRES_DB=airflow
+# PostgreSQL (Airflow metadata)
+PG_USER=airflow
+PG_PASSWORD=airflow
+PG_DB=airflow
 
-# PostgreSQL для учебных упражнений
-POSTGRES_USER=student
-POSTGRES_PASSWORD=student
-POSTGRES_DB=training
+# PostgreSQL для training exercises
+TRAINING_PG_USER=student
+TRAINING_PG_PASSWORD=student
+TRAINING_PG_DB=training
+TRAINING_PG_HOST=postgres-training
+TRAINING_PG_PORT=5432
+
+# Connection ID for PostgreSQL training database
+POSTGRES_CONN_ID=postgres_training
+
+# CSV Pipeline
+CSV_DIR=/opt/airflow/data
+CSV_ROWS=1000
+
+# Airflow Configuration
+_AIRFLOW_DB_UPGRADE=true
+_AIRFLOW_WWW_USER_CREATE=true
 ```
 
 ### Порты
