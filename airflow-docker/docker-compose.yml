@@ -38,14 +38,14 @@ services:
 
   # Airflow webserver
   airflow-webserver:
-    image: apache/airflow:2.9.2
+    build: .
+    image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
     command: >
       bash -c "
-        pip install --no-cache-dir psycopg2-binary &&
         airflow webserver
       "
     ports:
@@ -61,14 +61,14 @@ services:
 
   # Airflow scheduler
   airflow-scheduler:
-    image: apache/airflow:2.9.2
+    build: .
+    # image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
     command: >
       bash -c "
-        pip install --no-cache-dir psycopg2-binary &&
         airflow scheduler
       "
     volumes:
@@ -82,16 +82,16 @@ services:
 
   # Airflow init to create admin user
   airflow-init:
-    image: apache/airflow:2.9.2
+    build: .
+    # image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
     command: >
       bash -c "
-        pip install --no-cache-dir psycopg2-binary &&
         airflow db migrate &&
         airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.org
       "
