@@ -40,7 +40,7 @@ services:
     image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
     command: >
@@ -64,7 +64,7 @@ services:
     # image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
     command: >
@@ -87,7 +87,7 @@ services:
     # image: airflow-optimized:2.9.2
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
       AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
     volumes:
       - ./dags:/opt/airflow/dags
