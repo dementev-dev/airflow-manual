@@ -4,20 +4,17 @@ FROM apache/airflow:2.9.2
 # Set environment variables
 ENV AIRFLOW_HOME=/opt/airflow
 
-# Copy the optimized requirements file
-COPY requirements-optimized.txt .
+# Copy the project requirements file
+COPY --chown=airflow:0 requirements.txt ${AIRFLOW_HOME}/requirements.txt
 
 # Install the required Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r ${AIRFLOW_HOME}/requirements.txt
 
 # Create necessary directories
 RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/config /opt/airflow/data
 
 # Set working directory
 WORKDIR ${AIRFLOW_HOME}
-
-# Change ownership to airflow user
-RUN chown -R airflow:airflow ${AIRFLOW_HOME}
 
 # Expose the webserver port
 EXPOSE 8080
