@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.dummy import DummyOperator
+from airflow.models.baseoperator import chain
 import random
 
 # Определение DAG
@@ -35,7 +36,7 @@ def unreliable_task():
     if random.random() < 0.3:  # 30% вероятность ошибки
         print("Ошибка: задача не выполнена успешно!")
         raise Exception("Случайная ошибка в задаче")
-    
+
     print("Задача выполнена успешно!")
     return "Задача выполнена"
 
@@ -55,12 +56,12 @@ def retry_task():
     # Имитируем задачу, которая может завершиться с ошибкой, но со временем исправляется
     import time
     time.sleep(2)  # Имитация работы
-    
+
     # С вероятностью 50% задача завершится с ошибкой
     if random.random() < 0.5:
         print("Ошибка в retry_task!")
         raise Exception("Ошибка в задаче с повторными попытками")
-    
+
     print("retry_task выполнена успешно!")
     return "retry_task завершена"
 
@@ -102,6 +103,6 @@ end_task = DummyOperator(
 )
 
 # Установка зависимостей
-start_task >> [unreliable_task, retry_task]
-[unreliable_task, retry_task] >> [success_handler_task, failure_handler_task]
-[success_handler_task, failure_handler_task] >> end_task
+# Используем chain, чтобы наглядно показать ученикам построение ветвящихся зависимостей без ручного перечисления операторов.
+chain(start_task, [unreliable_task, retry_task], [success_handler_task, failure_handler_task], end_task)
+
