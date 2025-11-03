@@ -1,3 +1,15 @@
+x-airflow-env: &airflow-default-env
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
+  POSTGRES_TRAINING_HOST: postgres-training
+  POSTGRES_TRAINING_PORT: "5432"
+  POSTGRES_TRAINING_DB: training
+  POSTGRES_TRAINING_USER: student
+  POSTGRES_TRAINING_PASSWORD: student
+  AIRFLOW_CONN_POSTGRES_TRAINING: postgresql://student:student@postgres-training:5432/training
+
 services:
   # PostgreSQL for Airflow metadata
   postgres-metadata:
@@ -39,10 +51,7 @@ services:
     build: .
     image: airflow-optimized:2.9.2
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
+      <<: *airflow-default-env
     command: >
       bash -c "
         airflow webserver
@@ -65,10 +74,7 @@ services:
     build: .
     # image: airflow-optimized:2.9.2
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
+      <<: *airflow-default-env
     command: >
       bash -c "
         airflow scheduler
@@ -90,9 +96,7 @@ services:
     user: "0:0"
     # image: airflow-optimized:2.9.2
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-metadata:5432/airflow
-      AIRFLOW__WEBSERVER__SECRET_KEY: replace-me-with-random-string
+      <<: *airflow-default-env
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
@@ -103,7 +107,9 @@ services:
         chown -R airflow:0 /opt/airflow/data || true &&
         umask 000 &&
         su -s /bin/bash airflow -c 'airflow db migrate' &&
-        su -s /bin/bash airflow -c 'airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.org'
+        su -s /bin/bash airflow -c 'airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.org' &&
+        su -s /bin/bash airflow -c 'airflow connections delete postgres_training || true' &&
+        su -s /bin/bash airflow -c \"airflow connections add 'postgres_training' --conn-uri \\\"$${AIRFLOW_CONN_POSTGRES_TRAINING}\\\" --conn-description 'Training exercises database'\"
       "
     depends_on:
       postgres-metadata:

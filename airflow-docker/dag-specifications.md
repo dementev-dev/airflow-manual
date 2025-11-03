@@ -42,6 +42,8 @@ start_task → date_task → end_task
 - Execute SQL queries
 - Use PostgresOperator
 
+**Connection Hint:** `docker-compose run --rm airflow-init` automatically provisions the `postgres_training` connection via `airflow connections add`, so no manual setup is required. You can verify it with `docker-compose exec airflow-webserver airflow connections get postgres_training`.
+
 **Tasks:**
 - `create_table`: Create simple table (users, products)
 - `insert_data`: Insert sample records

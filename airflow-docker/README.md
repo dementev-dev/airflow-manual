@@ -4,7 +4,8 @@
 
 ## 🎯 Цель проекта
 
-Создать максимально простую среду для изучения Apache Airflow, где все переменные окружения захардкожены для удобства студентов.
+Создать максимально простую среду для изучения Apache Airflow.
+Для удобства все переменные окружения захардкожены в docker скрипты. На проде так делать не надо :)
 
 ## 📋 Предварительные требования
 
@@ -70,7 +71,7 @@ graph TB
 ```
 airflow-docker/
 ├── docker-compose.yml          # Конфигурация Docker
-├── .env                        # Переменные окружения (создается автоматически)
+├── .env                        # Файл не используется: переменные заданы в docker-compose.yml
 ├── dags/                       # DAG файлы для обучения
 │   ├── hello_world_dag.py      # Базовый пример
 │   ├── sql_basic_dag.py       # Работа с SQL
@@ -124,36 +125,22 @@ airflow-docker/
 
 ### Переменные окружения
 
-Все переменные захардкожены для простоты:
+В этом проекте мы не используем `.env`: все значения заданы напрямую в `docker-compose.yml`.
 
-```env
-# Airflow Configuration
-AIRFLOW_USER=admin
-AIRFLOW_PASSWORD=admin
+Сервисы Airflow получают:
+- `POSTGRES_TRAINING_HOST=postgres-training`
+- `POSTGRES_TRAINING_PORT=5432`
+- `POSTGRES_TRAINING_DB=training`
+- `POSTGRES_TRAINING_USER=student`
+- `POSTGRES_TRAINING_PASSWORD=student`
+- `AIRFLOW_CONN_POSTGRES_TRAINING=postgresql://student:student@postgres-training:5432/training`
 
-# PostgreSQL (Airflow metadata)
-PG_USER=airflow
-PG_PASSWORD=airflow
-PG_DB=airflow
+`docker-compose run --rm airflow-init` запускает `airflow connections add postgres_training`, поэтому соединение доступно сразу после инициализации. Проверить наличие можно через:
 
-# PostgreSQL для training exercises
-TRAINING_PG_USER=student
-TRAINING_PG_PASSWORD=student
-TRAINING_PG_DB=training
-TRAINING_PG_HOST=postgres-training
-TRAINING_PG_PORT=5432
-
-# Connection ID for PostgreSQL training database
-POSTGRES_CONN_ID=postgres_training
-
-# CSV Pipeline
-CSV_DIR=/opt/airflow/data
-CSV_ROWS=1000
-
-# Airflow Configuration
-_AIRFLOW_DB_UPGRADE=true
-_AIRFLOW_WWW_USER_CREATE=true
+```bash
+docker-compose exec airflow-webserver airflow connections get postgres_training
 ```
+
 
 ### Порты
 
