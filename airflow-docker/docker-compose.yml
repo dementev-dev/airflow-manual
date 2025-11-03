@@ -53,6 +53,8 @@ services:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
     depends_on:
+      airflow-init:
+        condition: service_completed_successfully
       postgres-metadata:
         condition: service_healthy
       postgres-training:
@@ -75,6 +77,8 @@ services:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
     depends_on:
+      airflow-init:
+        condition: service_completed_successfully
       postgres-metadata:
         condition: service_healthy
       postgres-training:
