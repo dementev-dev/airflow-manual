@@ -24,7 +24,7 @@ dag = DAG(
     'error_handling_dag',
     default_args=default_args,
     description='DAG для изучения обработки ошибок в Airflow',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=None,
     catchup=False,
     tags=['educational', 'error_handling', 'advanced']
 )
