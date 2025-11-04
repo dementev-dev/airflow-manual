@@ -1,7 +1,0 @@
-order_id,customer_id,product,amount,order_date
-101,1,Laptop,1200,2023-10-01
-102,2,Monitor,300,2023-10-02
-103,1,Keyboard,80,2023-10-03
-104,3,Mouse,25,2023-10-04
-105,4,Tablet,400,2023-10-05
-106,5,Headphones,100,2023-10-06
