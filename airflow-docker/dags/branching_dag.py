@@ -23,7 +23,7 @@ dag = DAG(
     'branching_dag',
     default_args=default_args,
     description='DAG для изучения условного выполнения задач в Airflow',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=None,
     catchup=False,
     tags=['educational', 'branching', 'advanced']
 )
@@ -95,6 +95,9 @@ end_task = DummyOperator(
 )
 
 # Установка зависимостей
+# BranchPythonOperator автоматически пропускает (skips) задачи в невыбранной ветке
+# Например, если check_data_quality возвращает 'process_csv_branch',
+# то задача process_json_branch будет пропущена (статус skipped)
 start_task >> check_quality_task
 check_quality_task >> [process_csv_task, process_json_task]
 [process_csv_task, process_json_task] >> merge_task >> end_task
