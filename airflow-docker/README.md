@@ -74,9 +74,9 @@ airflow-docker/
 ├── .env                        # Файл не используется: переменные заданы в docker-compose.yml
 ├── dags/                       # DAG файлы для обучения
 │   ├── hello_world_dag.py      # Базовый пример
-│   ├── sql_basic_dag.py       # Работа с SQL
-│   ├── file_operations_dag.py # Обработка файлов
-│   ├── data_processing_dag.py # ETL пайплайн
+│   ├── sql_basic_dag.py        # Работа с SQL
+│   ├── file_operations_dag.py  # Обработка файлов
+│   ├── data_processing_dag.py  # ETL пайплайн
 │   ├── branching_dag.py        # Условная логика
 │   └── error_handling_dag.py   # Обработка ошибок
 ├── data/                       # Данные для упражнений
