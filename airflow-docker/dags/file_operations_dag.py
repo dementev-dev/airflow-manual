@@ -1,6 +1,12 @@
 """
 DAG для демонстрации работы с файлами в Airflow
 Уровень: Средний
+
+Этот DAG генерирует русскоязычные данные с использованием библиотеки mimesis, включая:
+- ФИО (с учетом пола)
+- Возраст
+- Зарплату
+- Адрес проживания
 """
 import pandas as pd
 import os
@@ -24,7 +30,7 @@ dag = DAG(
     'file_operations_dag',
     default_args=default_args,
     description='DAG для изучения работы с файлами в Airflow',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=None,
     catchup=False,
     tags=['educational', 'files', 'intermediate']
 )
@@ -32,33 +38,56 @@ dag = DAG(
 def generate_sample_data():
     """Создание CSV файла с примерными данными"""
     import pandas as pd
-    import random
-    
+    from mimesis import Person, Address, Numeric
+    from mimesis.enums import Gender
+    from mimesis.locales import Locale
+
+    # Создаем генераторы с русской локализацией
+    person = Person(Locale.RU)
+    address = Address(Locale.RU)
+
+    # Генерируем данные
+    names = [person.full_name(gender=Gender.FEMALE if i % 3 == 0 else Gender.MALE) for i in range(1, 101)]
+    numeric = Numeric()
+    ages = [numeric.integer_number(start=18, end=65) for _ in range(100)]  # Используем правильный метод для генерации возраста
+    occupations = [person.occupation() for _ in range(100)]
+
     data = {
         'id': range(1, 101),
-        'name': [f'User_{i}' for i in range(1, 101)],
-        'age': [random.randint(18, 65) for _ in range(100)],
-        'salary': [random.randint(30000, 100000) for _ in range(100)]
+        'name': names,
+        'age': ages,
+        'salary': [max(30000, min(150000, ages[i] * 1200 + (hash(names[i]) % 15000) - 5000)) for i in range(100)],
+        'address': [address.address() for _ in range(100)]
     }
-    
+
     df = pd.DataFrame(data)
     df.to_csv('/opt/airflow/data/input/sample_data.csv', index=False)
     print(f"Создан файл с {len(df)} записями")
+    print(f"Пример данных: {data['name'][0]}, возраст: {data['age'][0]}, зарплата: {data['salary'][0]}, адрес: {data['address'][0]}")
     return "sample_data.csv created"
 
 def read_and_validate_data():
     """Чтение и валидация CSV файла"""
     df = pd.read_csv('/opt/airflow/data/input/sample_data.csv')
     print(f"Прочитан файл: {len(df)} строк, {len(df.columns)} столбцов")
-    
+    print(f"Колонки: {list(df.columns)}")
+
     # Простая валидация
     assert len(df) > 0, "Файл пустой"
     assert 'name' in df.columns, "Отсутствует столбец name"
+    assert 'address' in df.columns, "Отсутствует столбец address"
+    
+    # Дополнительная валидация для новых данных
+    assert df['name'].notna().all(), "Найдены пустые значения в столбце name"
+    assert df['address'].notna().all(), "Найдены пустые значения в столбце address"
+    assert df['age'].between(16, 100).all(), "Некорректные значения возраста"
+    assert df['salary'].between(20000, 150000).all(), "Некорректные значения зарплаты"
     
     return f"Файл валидирован: {len(df)} записей"
 
 def transform_data():
     """Преобразование данных"""
+    import os
     df = pd.read_csv('/opt/airflow/data/input/sample_data.csv')
     
     # Простое преобразование - добавим столбец с категорией зарплаты
@@ -66,9 +95,21 @@ def transform_data():
         lambda x: 'High' if x >= 70000 else 'Medium' if x >= 50000 else 'Low'
     )
     
+    # Добавим дополнительные трансформации для новых данных
+    # Извлечем город из адреса (первое слово в адресе часто является городом)
+    df['city'] = df['address'].str.split().str[0]
+    # Преобразуем возраст в возрастную категорию
+    df['age_category'] = df['age'].apply(
+        lambda x: 'Young' if x < 30 else 'Middle-aged' if x < 50 else 'Senior'
+    )
+    
+    # Создаем директорию, если она не существует
+    os.makedirs('/opt/airflow/data/output', exist_ok=True)
+    
     # Сохраняем обработанные данные
     df.to_csv('/opt/airflow/data/output/processed_data.csv', index=False)
     print(f"Обработаны данные: {len(df)} записей")
+    print(f"Добавлены новые столбцы: city, age_category")
     
     return f"Данные обработаны: {len(df)} записей"
 
@@ -79,9 +120,15 @@ def write_summary():
     summary = {
         'total_records': len(df),
         'avg_salary': df['salary'].mean(),
+        'avg_age': df['age'].mean(),
         'high_salary_count': len(df[df['salary_category'] == 'High']),
         'medium_salary_count': len(df[df['salary_category'] == 'Medium']),
-        'low_salary_count': len(df[df['salary_category'] == 'Low'])
+        'low_salary_count': len(df[df['salary_category'] == 'Low']),
+        'young_count': len(df[df['age_category'] == 'Young']),
+        'middle_aged_count': len(df[df['age_category'] == 'Middle-aged']),
+        'senior_count': len(df[df['age_category'] == 'Senior']),
+        'unique_cities': df['city'].nunique(),
+        'top_cities': df['city'].value_counts().head(5).to_dict()
     }
     
     # Сохраняем сводку в текстовый файл
@@ -89,9 +136,15 @@ def write_summary():
         f.write("Сводка по обработанным данным:\n")
         f.write(f"Всего записей: {summary['total_records']}\n")
         f.write(f"Средняя зарплата: {summary['avg_salary']:.2f}\n")
+        f.write(f"Средний возраст: {summary['avg_age']:.2f}\n")
         f.write(f"Высокая зарплата: {summary['high_salary_count']}\n")
         f.write(f"Средняя зарплата: {summary['medium_salary_count']}\n")
         f.write(f"Низкая зарплата: {summary['low_salary_count']}\n")
+        f.write(f"Молодые (до 30): {summary['young_count']}\n")
+        f.write(f"Среднего возраста (30-49): {summary['middle_aged_count']}\n")
+        f.write(f"Пожилые (50+): {summary['senior_count']}\n")
+        f.write(f"Уникальных городов: {summary['unique_cities']}\n")
+        f.write(f"Топ-5 городов: {summary['top_cities']}\n")
     
     print("Создана сводка по данным")
     return "Сводка создана"
