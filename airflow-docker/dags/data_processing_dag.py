@@ -23,7 +23,7 @@ dag = DAG(
     'data_processing_dag',
     default_args=default_args,
     description='DAG для изучения ETL процессов в Airflow',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=None,
     catchup=False,
     tags=['educational', 'etl', 'intermediate']
 )
