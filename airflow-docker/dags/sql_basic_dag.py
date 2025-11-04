@@ -22,14 +22,14 @@ dag = DAG(
     'sql_basic_dag',
     default_args=default_args,
     description='DAG для изучения SQL операций в Airflow',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=None,
     catchup=False,
     tags=['educational', 'sql', 'beginner']
 )
 
 # SQL команды
 create_table_sql = """
-CREATE TABLE IF NOT EXISTS students (
+CREATE TABLE IF NOT EXISTS students_sample (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
     age INTEGER,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS students (
 """
 
 insert_data_sql = """
-INSERT INTO students (name, age) VALUES 
+INSERT INTO students_sample (name, age) VALUES 
 ('Alice', 22),
 ('Bob', 24),
 ('Charlie', 21)
@@ -46,11 +46,11 @@ ON CONFLICT DO NOTHING;
 """
 
 query_data_sql = """
-SELECT * FROM students;
+SELECT * FROM students_sample;
 """
 
-drop_table_sql = """
--- DROP TABLE IF EXISTS students; -- Закомментировано для сохранения данных
+truncate_table_sql = """
+TRUNCATE TABLE students_sample;
 """
 
 # Определение задач
@@ -75,12 +75,12 @@ query_data_task = PostgresOperator(
     dag=dag
 )
 
-drop_table_task = PostgresOperator(
+truncate_table_task = PostgresOperator(
     task_id='drop_table',
     postgres_conn_id='postgres_training',
-    sql=drop_table_sql,
+    sql=truncate_table_sql,
     dag=dag
 )
 
 # Установка зависимостей
-create_table_task >> insert_data_task >> query_data_task >> drop_table_task
+create_table_task >> insert_data_task >> query_data_task >> truncate_table_task
