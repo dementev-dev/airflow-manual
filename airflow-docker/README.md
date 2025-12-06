@@ -44,26 +44,46 @@ docker-compose up -d
 ## 🏗️ Архитектура стенда
 
 ```mermaid
-graph TB
-    A[Airflow Webserver] --> B[PostgreSQL Metadata]
-    C[Airflow Scheduler] --> B
-    D[Educational DAGs] --> E[PostgreSQL Training]
-    D --> F[Local Filesystem]
-    
-    A -- порт 8080 --> G[Пользователь]
-    E -- порт 5432 --> H[SQL Клиент]
-    
-    subgraph "Контейнеры Docker"
-        A
-        C
-        B
-        E
+graph LR
+
+    %% Локальная файловая система
+    subgraph local["Локальная файловая система"]
+        dags["Каталог<br/>Educational DAGs"]
+        fs["Local Filesystem"]
+        dags --> fs
     end
-    
-    subgraph "Локальная файловая система"
-        F
-        D
+
+    %% Docker-контейнеры
+    subgraph docker["Контейнеры Docker"]
+        subgraph airflow["Airflow"]
+            ws["Airflow Webserver"]
+            sch["Airflow Scheduler"]
+            meta["PostgreSQL Metadata"]
+            sch --> meta
+            ws --> meta
+        end
+
+        subgraph training["Учебная БД"]
+            train["PostgreSQL Training"]
+        end
     end
+
+    %% Клиенты
+    subgraph clients["Клиенты"]
+        user["Пользователь<br/>(браузер)"]
+        sql["SQL клиент"]
+    end
+
+    %% Монтирование DAG'ов в контейнеры Airflow
+    dags -. "том с DAG-файлами" .- ws
+    dags -. "том с DAG-файлами" .- sch
+
+    %% Airflow-задачи работают с учебной БД
+    sch -- "задачи DAG" --> train
+
+    %% Внешние подключения
+    user -- "порт 8080" --> ws
+    sql -- "порт 5432" --> train
 ```
 
 ## 📁 Структура проекта
