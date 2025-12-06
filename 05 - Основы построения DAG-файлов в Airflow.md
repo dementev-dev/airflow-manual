@@ -4,20 +4,63 @@
 
 # Как устроен код DAG-файла
 
-Как вы уже знаете из предыдущих уроков, DAG представляет собой граф вычислений, состоящий из отдельных задач (tasks). На уровне кода DAG — это обычный Python-файл, который описывает все задачи в рамках пайплайна и определяет последовательность их выполнения.
+DAG представляет собой граф вычислений, состоящий из отдельных задач (tasks). На уровне кода DAG‑файл — это обычный Python‑скрипт, который Airflow регулярно импортирует, чтобы «увидеть» ваши пайплайны.
 
-Любой DAG-файл состоит из нескольких ключевых компонентов:
-- Импорт необходимых модулей и библиотек
-- Настройка параметров и инициализация объекта DAG
-- Создание отдельных задач с помощью операторов
-- Определение порядка выполнения задач
+Удобно мысленно разбивать любой DAG‑файл на четыре блока:
+1. Импорт необходимых модулей и операторов
+2. Настройка параметров и инициализация объекта `DAG`
+3. Создание отдельных задач с помощью операторов
+4. Определение порядка выполнения задач (задание зависимостей)
 
-Порядок этих компонентов имеет значение, поскольку Airflow — это Python-библиотека, и обращение к еще не инициализированным объектам приведет к ошибкам выполнения.
+Порядок этих блоков важен: как и в любом Python‑коде, нельзя обращаться к объектам, которые ещё не созданы.
 
-Давайте рассмотрим простой пример DAG-файла и разберем его по частям.
+Ниже приведён простой пример DAG‑файла. В следующих подразделах мы разберём каждый блок по отдельности, опираясь на этот пример.
 
-![](_attachments/dag_file_structure.png)
-*Пример структуры DAG-файла*
+```python
+# Секция импортов
+from datetime import timedelta
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from airflow.utils.dates import days_ago
+
+# Настройки параметров по умолчанию (default_args)
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': days_ago(2),
+    'email': ['airflow@example.com'],
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+# Объявление DAG
+dag = DAG(
+    dag_id='tutorial',
+    default_args=default_args,
+    description='A simple tutorial DAG',
+    schedule_interval=timedelta(days=1),
+)
+
+# Объявление задач (operators)
+t1 = BashOperator(
+    task_id='print_date',
+    bash_command='date',
+    dag=dag,
+)
+
+t2 = BashOperator(
+    task_id='sleep',
+    depends_on_past=False,
+    bash_command='sleep 5',
+    retries=3,
+    dag=dag,
+)
+
+# Задание графа последовательности
+t1 >> t2
+```
 
 ## Импорт необходимых модулей
 
@@ -90,34 +133,56 @@ t2 = BashOperator(
 
 ## Определение последовательности выполнения
 
-Завершающий этап — указание порядка выполнения задач. В Airflow для этого используются стрелочные операторы:
+Завершающий этап — указание порядка выполнения задач. В Airflow для этого используются стрелочные операторы `>>` и `<<`.
 
-В приведенном примере задача с идентификатором 'process_data' будет запускаться только после успешного завершения задачи 'show_time'.
-
-```python
-t1 >> t2  # t2 запускается после завершения t1
-```
-
-Альтернативный синтаксис:
-
-Этот синтаксис эквивалентен предыдущему примеру, просто записан в обратном порядке. Задача 'show_time' должна завершиться перед запуском задачи 'process_data'.
-```python
-t2 << t1  # t1 должна завершиться перед запуском t2
-```
-
-Можно также группировать задачи в списки для создания более сложных зависимостей:
-
-В этом примере задачи 't2' и 't3' будут запускаться одновременно после завершения задачи 't1'. Затем задача 't4' запустится после завершения обеих задач 't2' и 't3'.
+В простейшем случае мы просто строим цепочку:
 
 ```python
-t1 >> [t2, t3]  # t2 и t3 запускаются одновременно после t1
-[t2, t3] >> t4  # t4 запускается после завершения t2 и t3
+t1 >> t2 >> t3  # t2 после t1, t3 после t2
 ```
 
-Для сложных пайплайнов можно создавать цепочки любой сложности:
+Параллельные ветки:
+
+```python
+t1 >> [t2, t3]   # t2 и t3 стартуют после t1
+[t2, t3] >> t4   # t4 стартует после завершения и t2, и t3
+```
+
+Можно комбинировать:
+
 ```python
 t1 >> [t2, t3] >> t4 >> [t5, t6, t7] >> t8
 ```
+
+Важно: стрелочный синтаксис хорошо работает для случаев
+*«одна задача → список задач»* и *«список задач → одна задача»*.
+
+Но он **не умеет** напрямую связывать два списка между собой:
+
+```python
+[t2, t3] >> [t5, t6, t7]  # так делать нельзя — будет ошибка
+```
+
+Если вам нужно, чтобы **каждая** из задач `t2` и `t3` была предком для **каждой** из задач `t5`, `t6`, `t7`, используйте встроенную функцию `cross_downstream`:
+
+```python
+from airflow.models.baseoperator import cross_downstream
+
+cross_downstream(
+    from_tasks=[t2, t3],
+    to_tasks=[t5, t6, t7],
+)
+```
+
+Такой код создаст зависимости:
+
+* `t2` → `t5`, `t6`, `t7`
+* `t3` → `t5`, `t6`, `t7`
+
+Под капотом `cross_downstream` как раз делает вложенный цикл,
+но в коде явно видно, что мы хотим «полный крест» между двумя наборами задач, и не приходится писать ручные `for`-ы — это рекомендованный в документации Apache Airflow подход.
+
+> 💡 В более больших DAG-ах, где таких блоков много, удобнее не оперировать списками, а **группировать задачи в `TaskGroup`** (Task Group). Тогда зависимости задаются уже между группами, а не между отдельными списками задач. Об этом отдельно поговорим в разделе про TaskGroup.
 
 ## Полный пример DAG-файла
 
@@ -178,10 +243,9 @@ t1 >> t2
 2. Создание агрегированной таблицы по регионам и категориям
 3. Сохранение результата в базу данных PostgreSQL
 
-Вот полный код нашего DAG:
+Вот полный код нашего DAG, адаптированный под учебный стенд из папки `airflow-docker`:
 
 ```python
-import os
 import datetime as dt
 import pandas as pd
 from airflow.models import DAG
@@ -189,6 +253,10 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 
 from sqlalchemy import create_engine
+
+
+# Подключение к учебной базе PostgreSQL (postgres-training)
+DB_URL = "postgresql://student:student@postgres-training:5432/training"
 
 
 # Базовые параметры DAG
@@ -199,25 +267,30 @@ args = {
     'retry_delay': dt.timedelta(minutes=1),
 }
 
+
 def download_titanic_dataset():
+    """Загрузка датасета Titanic и сохранение в базу"""
     url = 'https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv'
     df = pd.read_csv(url)
-    engine = create_engine('postgresql+psycopg2://jovyan:jovyan@localhost:5432/de')
+
+    engine = create_engine(DB_URL)
     df.to_sql('titanic', engine, index=False, if_exists='replace', schema='public')
 
 
 def pivot_dataset():
-    engine = create_engine('postgresql+psycopg2://jovyan:jovyan@localhost:5432/de')
+    """Построение сводной таблицы и сохранение результата"""
+    engine = create_engine(DB_URL)
     titanic_df = pd.read_sql('select * from public.titanic', con=engine)
     
     df = titanic_df.pivot_table(
-            index=['Sex'],
-            columns=['Pclass'],
-            values='Name',
-            aggfunc='count'
-        ).reset_index()
+        index=['Sex'],
+        columns=['Pclass'],
+        values='Name',
+        aggfunc='count'
+    ).reset_index()
 
-    df.to_sql('titanic_pivot', engine, index=False, if_exists='replace', schema='public' )
+    df.to_sql('titanic_pivot', engine, index=False, if_exists='replace', schema='public')
+
 
 dag = DAG(
     dag_id='titanic_pivot',
@@ -228,7 +301,7 @@ dag = DAG(
 # Начальная задача для логирования
 start = BashOperator(
     task_id='start',
-    bash_command='echo "Начинаем выполнение пайплайна! "',
+    bash_command='echo "Начинаем выполнение пайплайна!"',
     dag=dag,
 )
 
@@ -250,37 +323,23 @@ pivot_titanic_dataset = PythonOperator(
 start >> create_titanic_dataset >> pivot_titanic_dataset
 ```
 
-Этот код использует `PythonOperator` для выполнения функций работы с данными, что является стандартной практикой для задач обработки данных. В примере функция `load_customer_dataset` загружает данные из внешнего источника, а `aggregate_customer_dataset` создает агрегированную таблицу.
+Этот код использует `PythonOperator` для выполнения функций работы с данными: `download_titanic_dataset` загружает исходный датасет и сохраняет его в учебную базу PostgreSQL, а `pivot_dataset` строит сводную таблицу и записывает результат в отдельную таблицу `titanic_pivot`.
 
 ## Загрузка DAG в учебную среду
 
 Для тестирования нашего DAG в учебной среде выполните следующие шаги:
 
-1. Сохраните код в файл с расширением `.py` (например, `customer_analysis_dag.py`)
-
-Для тестирования нашего DAG в учебной среде выполните следующие шаги:
-
-1. Сохраните код в файл с расширением `.py` (например, `customer_analysis_dag.py`)
-
-2. Найдите запущенный контейнер с учебной средой Airflow:
+1. Сохраните код в файл с расширением `.py` в папке стенда, например `airflow-docker/dags/titanic_pivot_dag.py`.
+2. Убедитесь, что стенд запущен:
 ```bash
-docker ps
+cd airflow-docker
+docker-compose up -d
 ```
+3. Подождите 30–60 секунд — Airflow автоматически обнаружит новый файл в папке `dags`.
+4. Откройте веб-интерфейс Airflow (http://localhost:8080), найдите DAG `titanic_pivot` по идентификатору и запустите его.
 
-3. Скопируйте файл в контейнер:
-```bash
-docker cp /путь/к/файлу/customer_analysis_dag.py [ID_КОНТЕЙНЕРА]:/lessons/dags/customer_analysis_dag.py
-```
+После запуска вы можете посмотреть статус задач и логи в интерфейсе Airflow
+(подробнее про это — в разделе про пользовательский интерфейс).
 
-Например:
-```bash
-docker cp ~/Desktop/customer_analysis_dag.py 4dc4fbfedcf4:/lessons/dags/customer_analysis_dag.py
-```
-
-4. Подождите 30-60 секунд — Airflow автоматически обнаружит новый файл
-
-5. Найдите ваш DAG в интерфейсе Airflow через строку поиска и запустите его
-
-![Пример запуска DAG в интерфейсе Airflow](_attachments/dag_interface_example.png)
-
-В этом уроке вы изучили основную структуру DAG-файлов, создали свой первый рабочий пайплайн, научились загружать его в учебную среду и запускать для получения результатов.
+В этом уроке вы изучили основную структуру DAG-файлов, создали свой первый рабочий пайплайн,
+научились загружать его в учебную среду и запускать для получения результатов.

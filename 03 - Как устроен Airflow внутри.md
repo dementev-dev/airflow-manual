@@ -8,7 +8,36 @@ Apache Airflow состоит из нескольких взаимосвязан
 
 На схеме ниже показано, как эти компоненты взаимодействуют между собой:
 
-![](_attachments/airflow_architecture.png)
+```mermaid
+flowchart LR
+    de["👤 Data Engineer"]
+    dags["DAGs (файлы)"]
+    cfg["airflow.cfg"]
+
+    subgraph core["Airflow core"]
+        web["Webserver (UI)"]
+
+        subgraph se["Scheduling & Execution"]
+            sch["Scheduler"]
+            ex["Executor"]
+            wk["Worker(s)"]
+
+            sch --> ex
+            ex --> wk
+        end
+    end
+
+    db["Metadata DB (Postgres)"]
+
+    de --> web
+    de --> dags
+    de --> cfg
+
+    dags --> sch
+
+    web --> db
+    se --> db
+```
 *Как устроена система Airflow*
 
 Давайте подробно рассмотрим каждый компонент системы.
