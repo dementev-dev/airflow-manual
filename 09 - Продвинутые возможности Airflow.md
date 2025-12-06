@@ -177,6 +177,43 @@ with TaskGroup("data_loading") as loading_group:
 
 Обратите внимание: при использовании TaskGroup последовательность задач указывается внутри группы после объявления всех задач, а в конце DAG описывается последовательность выполнения самих групп.
 
+Ниже приведена упрощённая схема зависимостей между тремя группами задач:
+
+```mermaid
+flowchart LR
+
+  %% group1
+  subgraph G1["group1"]
+    g1_t1["task1"]
+    g1_t2["task2"]
+    g1_t3["task3"]
+
+    g1_t1 --> g1_t2
+    g1_t1 --> g1_t3
+  end
+
+  %% group2
+  subgraph G2["group2"]
+    g2_t1["task1"]
+    g2_t2["task2"]
+
+    g2_t1 --> g2_t2
+  end
+
+  %% group3
+  subgraph G3["group3"]
+    g3_t1["task1"]
+    g3_t2["task2"]
+
+    g3_t1 --> g3_t2
+  end
+
+  %% зависимости между группами
+  g1_t2 --> g3_t1
+  g1_t3 --> g3_t1
+  g2_t2 --> g3_t1
+```
+
 Визуально в интерфейсе Airflow группы задач отображаются как один узел с небольшим индикатором. Клик по нему разворачивает или сворачивает вложенные задачи, что значительно улучшает восприятие DAG с большим количеством задач и связей, особенно когда в них десятки и сотни задач.
 
 TaskGroup — это удобный способ логической группировки задач, который помогает упростить код и представить сложные пайплайны более компактно.
@@ -312,8 +349,8 @@ def get_file_path(file_name):
     return os.path.join(os.path.expanduser('~/data'), file_name)
 
 def load_customer_data():
-    url = 'https://example.com/customer_data.csv'
-    df = pd.read_csv(url)
+    file_path = get_file_path('customer_data.csv')
+    df = pd.read_csv(file_path)
     engine = create_engine(DATABASE_URL)
     df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
 
@@ -396,8 +433,8 @@ def get_file_path(file_name):
     return os.path.join(os.path.expanduser('~/data'), file_name)
 
 def load_customer_data():
-    url = 'https://example.com/customer_data.csv'
-    df = pd.read_csv(url)
+    file_path = get_file_path('customer_data.csv')
+    df = pd.read_csv(file_path)
     engine = create_engine(DATABASE_URL)
     df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
 
