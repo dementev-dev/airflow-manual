@@ -41,3 +41,6 @@ Prerequisite: Docker + Docker Compose.
 ## Security & Configuration Tips
 - Do not commit secrets. Use environment variables and local `.env` files if needed.
 - Use `airflow-docker/data/` for sample data; avoid real PII in the repo.
+
+## Hints
+- При работе под Windows для работы с командной строкой используй PowerShell
