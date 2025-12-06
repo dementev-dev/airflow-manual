@@ -13,6 +13,18 @@
 Проще говоря, DAG — это упорядоченный набор задач, которые выполняются строго по расписанию и никогда не повторяются в рамках одного запуска. Создавая пайплайны для обработки данных, вы фактически создаете DAG.
 
 ![Пример направленного ациклического графа](_attachments/dag_example_directed_graph.png)
+```mermaid
+flowchart LR
+    n1((1)) --> n2((2))
+    n1 --> n3((3))
+
+    n2 --> n4((4))
+    n3 --> n6((6))
+    n6 --> n7((7))
+
+    n7 --> n12
+    n4 --> n12((12))
+```
 
 # Шаги вашего пайплайна: Задачи
 
@@ -26,14 +38,52 @@
 
 На примере ниже видно, как задача E зависит от успешного завершения всех предыдущих задач:
 
-![DAG как последовательность задач](_attachments/dag_as_task_sequence.png)
+```mermaid
+flowchart LR
+    A["Task A"] --> B["Task B"]
+    A --> C["Task C"]
+
+    B --> D["Task D"]
+    C --> D
+
+    D --> E["Task E"]
+```
 
 Airflow позволяет создавать сложные сценарии:
 - Зависимости между разными DAG-ами с помощью TriggerDagRunOperator и ExternalTaskSensor
 - Условное выполнение задач в зависимости от результатов предыдущих шагов
 - Сложные ветвления и параллельные ветки выполнения
 
-![Пример сложного DAG в Airflow](_attachments/complex_dag_example.png)
+```mermaid
+flowchart LR
+    %% без цветов, только форма и рамка
+    classDef taskGroup stroke-width:3px;
+    classDef endpoint stroke-width:2px,stroke-dasharray: 5 3;
+
+    start(("начало")):::endpoint --> print_start["print_start_bash"]
+
+    print_start --> py1["python_function_with_input_1"]
+    print_start --> py4["python_function_with_input_4"]
+
+    py1 --> py2["python_function_with_input_2"]
+    py1 --> py3["python_function_with_input_3"]
+
+    py4 --> py5["python_function_with_input_5"]
+    py4 --> py6["python_function_with_input_6"]
+
+    py2 --> py_join["python_function_with_input"]
+    py3 --> py_join
+    py5 --> py_join
+    py6 --> py_join
+
+    py_join --> tg["task_group_with_two_tasks"]:::taskGroup
+
+    tg --> dyn123["dynamic_task_123"]
+    tg --> dyn456["dynamic_task_456"]
+
+    dyn123 --> finish(("конец")):::endpoint
+    dyn456 --> finish
+```
 
 # Инструменты для выполнения: Операторы
 
