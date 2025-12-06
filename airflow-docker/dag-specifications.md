@@ -131,6 +131,27 @@ Process data based on file type or data quality
 - `success_handler`: On success callback
 - `failure_handler`: On failure callback
 
+### Level 4: Orchestration & Collaboration (Week 4)
+
+#### 4.1 advanced_features_dag.py
+**Learning Objectives:**
+- Control concurrency with pools and `pool_slots`
+- Exchange data between tasks using XCom
+- Group related tasks using `TaskGroup`
+- Configure email-based alerting on failures
+
+**Scenario:**
+Enhanced daily analytics pipeline that reads data from the training database, performs transformations, and writes summaries, while limiting heavy backup tasks via a dedicated pool and sending notifications about pipeline status.
+
+**Tasks:**
+- `extract_group`: Use `TaskGroup` to wrap extract tasks (e.g., customers and orders)
+- `transform_group`: Aggregate metrics and prepare summary tables
+- `load_group`: Simulate loading results back into the training database or files
+- `backup_task`: Heavy backup task running in a dedicated pool (e.g., `backup_pool`) with custom `pool_slots`
+- `calculate_metrics`: Python task that returns aggregated metrics (pushed to XCom)
+- `log_metrics`: Task that reads metrics via `xcom_pull` and logs them or uses them in a template
+- `send_notification`: Final notification task (email or log) triggered with `ALL_DONE` semantics
+
 ## Sample Data Files
 
 ### customers.csv
@@ -213,6 +234,12 @@ CREATE TABLE enrollments (
 - ✅ Handle errors and retries
 - ✅ Use parameters and templates
 - ✅ Monitor and debug workflows
+
+### Week 4: Orchestration & Operations
+- ✅ Use pools to control resource usage
+- ✅ Share data between tasks via XCom
+- ✅ Group tasks using `TaskGroup`
+- ✅ Configure alerting and notifications for failures
 
 ## Common Pitfalls and Solutions
 
