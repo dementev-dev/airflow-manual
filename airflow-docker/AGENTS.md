@@ -7,9 +7,8 @@ This file provides guidance for AI agents working on the educational Airflow set
 
 ```
 airflow-docker/
-├── docker-compose.yml          # Docker configuration
-├── .env                        # Hardcoded environment variables
-├── dags/                        # DAG files for learning
+├── docker-compose.yml          # Docker configuration and environment
+├── dags/                       # DAG files for learning
 │   ├── hello_world_dag.py      # Basic Python operators
 │   ├── sql_basic_dag.py       # SQL operations
 │   ├── file_operations_dag.py   # File processing
@@ -118,8 +117,7 @@ docker-compose logs postgres-metadata
 ## 📚 Key Files to Examine
 
 ### Configuration Files
-- [`docker-compose.yml`](docker-compose.yml) - Main Docker configuration
-- [`.env`](.env) - Environment variables
+- [`docker-compose.yml`](docker-compose.yml) - Main Docker configuration and environment variables
 - [`requirements.txt`](requirements.txt) - Python dependencies
 
 ### Sample Data Files

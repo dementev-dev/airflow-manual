@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-This repository contains an educational manual for Apache Airflow with runnable examples. The root holds the written guides; `airflow-docker/` provides a self-contained Docker setup to run and explore DAGs.
+This repository contains an educational manual for Apache Airflow with runnable examples. The root holds the written guides; `airflow-docker/` provides a self-contained Docker setup to run and explore DAGs. The course and examples target Apache Airflow **2.9.x**.
 
 ## Project Structure & Module Organization
 - Root `01-09 *.md`: step-by-step articles (RU).
