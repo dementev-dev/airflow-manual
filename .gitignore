@@ -1,0 +1,8 @@
+# JetBrains IDEs
+.idea/
+# Исключаем конкретные файлы из игнорирования
+!.idea/gradle.xml
+!.idea/misc.xml
+!.idea/modules.xml
+!.idea/vcs.xml
+!.idea/runConfigurations/
