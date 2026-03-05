@@ -147,4 +147,14 @@ Airflow поддерживает расширение функционально
 
 Взаимосвязь этих компонентов можно представить так:
 
-![](_attachments/Pasted%20image%2020240207100327.png)
+```mermaid
+flowchart LR
+    subgraph DAG ["Ваш пайплайн (DAG)"]
+        direction LR
+        Task1["Задача 1"] --> Task2["Задача 2"] --> Task3["Задача 3"]
+    end
+
+    Task1 -.->|Как делать?| Op1["Оператор\n(например, PythonOperator)"]
+    Task2 -.->|Чего ждать?| Sen1["Сенсор\n(например, S3Sensor)"]
+    Task3 -.->|Как делать?| Op2["Оператор\n(например, PostgresOperator)"]
+```
