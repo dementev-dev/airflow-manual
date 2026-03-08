@@ -9,7 +9,7 @@ from typing import List
 
 import pandas as pd
 from airflow.operators.python import PythonOperator
-from helpers.greenplum import get_gp_conn
+from helpers.postgres import get_postgres_conn
 
 from airflow import DAG
 
@@ -21,15 +21,13 @@ def _create_table() -> None:
     """Создаёт таблицу public.orders, если она ещё не существует."""
     ddl = """
     CREATE TABLE IF NOT EXISTS public.orders (
-        order_id BIGINT,
+        order_id BIGINT PRIMARY KEY,
         order_ts TIMESTAMP NOT NULL,
         customer_id BIGINT NOT NULL,
         amount NUMERIC(12,2) NOT NULL
-    )
-    WITH (appendonly=true, orientation=row, compresstype=zstd, compresslevel=1)
-    DISTRIBUTED BY (order_id);
+    );
     """
-    with get_gp_conn() as conn, conn.cursor() as cur:
+    with get_postgres_conn() as conn, conn.cursor() as cur:
         cur.execute(ddl)
         conn.commit()
 
@@ -90,13 +88,13 @@ def _preview_csv(csv_path: str, sample_rows: int = 5) -> None:
 
 
 def _load_csv(csv_path: str) -> None:
-    """Загружает CSV в Greenplum через временную таблицу и anti-join."""
+    """Загружает CSV в Postgres через временную таблицу и anti-join."""
     csv_file = Path(csv_path)
     if not csv_file.exists():
         raise FileNotFoundError(f"CSV не найден: {csv_file}")
 
     with (
-        get_gp_conn() as conn,
+        get_postgres_conn() as conn,
         conn.cursor() as cur,
         csv_file.open("r", encoding="utf-8") as f,
     ):
@@ -129,12 +127,12 @@ def _load_csv(csv_path: str) -> None:
 default_args = {"owner": "airflow", "retries": 1, "retry_delay": timedelta(seconds=30)}
 
 with DAG(
-    dag_id="csv_to_greenplum",
+    dag_id="csv_to_postgres",
     start_date=datetime(2017, 1, 1),
     schedule=None,
     catchup=False,
     default_args=default_args,
-    tags=["demo", "greenplum", "csv"],
+    tags=["demo", "postgres", "csv"],
 ) as dag:
     create_table = PythonOperator(
         task_id="create_orders_table",
@@ -157,7 +155,7 @@ with DAG(
     )
 
     load_csv = PythonOperator(
-        task_id="load_csv_to_greenplum",
+        task_id="load_csv_to_postgres",
         python_callable=_load_csv,
         op_kwargs={
             "csv_path": "{{ ti.xcom_pull(task_ids='generate_csv') }}",

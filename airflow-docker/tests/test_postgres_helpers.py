@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, Sequence
 
 import pytest
 
-import airflow.dags.helpers.greenplum as greenplum
-from tests.conftest import patch_postgres_hook
+# Добавляем путь к dags в sys.path для импорта модулей
+dags_path = str(Path(__file__).parent.parent / "dags")
+if dags_path not in sys.path:
+    sys.path.insert(0, dags_path)
+
+import helpers.postgres as postgres_helpers
+from conftest import patch_postgres_hook
 
 
 @dataclass
@@ -49,7 +56,7 @@ class FakeConn:
         self.commits += 1
 
 
-def test_get_gp_conn_uses_airflow_hook(monkeypatch) -> None:
+def test_get_postgres_conn_uses_airflow_hook(monkeypatch) -> None:
     class FakeHook:
         def __init__(self, postgres_conn_id: str) -> None:
             self.postgres_conn_id = postgres_conn_id
@@ -58,15 +65,15 @@ def test_get_gp_conn_uses_airflow_hook(monkeypatch) -> None:
             return "hook_connection"
 
     patch_postgres_hook(monkeypatch, FakeHook)
-    monkeypatch.setattr(greenplum, "GP_CONN_ID", "demo_conn", raising=False)
-    monkeypatch.setattr(greenplum, "GP_USE_AIRFLOW_CONN", True, raising=False)
+    monkeypatch.setattr(postgres_helpers, "POSTGRES_CONN_ID", "demo_conn", raising=False)
+    monkeypatch.setattr(postgres_helpers, "POSTGRES_USE_AIRFLOW_CONN", True, raising=False)
 
-    conn = greenplum.get_gp_conn()
+    conn = postgres_helpers.get_postgres_conn()
 
     assert conn == "hook_connection"
 
 
-def test_get_gp_conn_fallback_to_psycopg(monkeypatch) -> None:
+def test_get_postgres_conn_fallback_to_psycopg(monkeypatch) -> None:
     class BrokenHook:
         def __init__(self, postgres_conn_id: str) -> None:
             self.postgres_conn_id = postgres_conn_id
@@ -75,13 +82,13 @@ def test_get_gp_conn_fallback_to_psycopg(monkeypatch) -> None:
             raise RuntimeError("boom")
 
     patch_postgres_hook(monkeypatch, BrokenHook)
-    monkeypatch.setattr(greenplum, "GP_USE_AIRFLOW_CONN", True, raising=False)
-    monkeypatch.setattr(greenplum, "GP_CONN_ID", "demo_conn", raising=False)
-    monkeypatch.setenv("GP_DB", "demo_db")
-    monkeypatch.setenv("GP_USER", "demo_user")
-    monkeypatch.setenv("GP_PASSWORD", "secret")
-    monkeypatch.setenv("GP_HOST", "greenplum-host")
-    monkeypatch.setenv("GP_PORT", "5434")
+    monkeypatch.setattr(postgres_helpers, "POSTGRES_USE_AIRFLOW_CONN", True, raising=False)
+    monkeypatch.setattr(postgres_helpers, "POSTGRES_CONN_ID", "demo_conn", raising=False)
+    monkeypatch.setenv("POSTGRES_DB", "demo_db")
+    monkeypatch.setenv("POSTGRES_USER", "demo_user")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "secret")
+    monkeypatch.setenv("POSTGRES_HOST", "postgres-host")
+    monkeypatch.setenv("POSTGRES_PORT", "5434")
 
     captured_kwargs = {}
 
@@ -89,27 +96,27 @@ def test_get_gp_conn_fallback_to_psycopg(monkeypatch) -> None:
         captured_kwargs.update(kwargs)
         return "psycopg_connection"
 
-    monkeypatch.setattr(greenplum.psycopg2, "connect", fake_connect)
+    monkeypatch.setattr(postgres_helpers.psycopg2, "connect", fake_connect)
 
-    conn = greenplum.get_gp_conn()
+    conn = postgres_helpers.get_postgres_conn()
 
     assert conn == "psycopg_connection"
     assert captured_kwargs == {
         "dbname": "demo_db",
         "user": "demo_user",
         "password": "secret",
-        "host": "greenplum-host",
+        "host": "postgres-host",
         "port": 5434,
     }
 
 
-def test_get_gp_conn_without_airflow(monkeypatch) -> None:
-    monkeypatch.setattr(greenplum, "GP_USE_AIRFLOW_CONN", False, raising=False)
-    monkeypatch.setenv("GP_DB", "demo_db")
-    monkeypatch.setenv("GP_USER", "demo_user")
-    monkeypatch.setenv("GP_PASSWORD", "secret")
-    monkeypatch.setenv("GP_HOST", "greenplum-host")
-    monkeypatch.setenv("GP_PORT", "5435")
+def test_get_postgres_conn_without_airflow(monkeypatch) -> None:
+    monkeypatch.setattr(postgres_helpers, "POSTGRES_USE_AIRFLOW_CONN", False, raising=False)
+    monkeypatch.setenv("POSTGRES_DB", "demo_db")
+    monkeypatch.setenv("POSTGRES_USER", "demo_user")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "secret")
+    monkeypatch.setenv("POSTGRES_HOST", "postgres-host")
+    monkeypatch.setenv("POSTGRES_PORT", "5435")
 
     captured_kwargs = {}
 
@@ -117,9 +124,9 @@ def test_get_gp_conn_without_airflow(monkeypatch) -> None:
         captured_kwargs.update(kwargs)
         return "direct_psycopg"
 
-    monkeypatch.setattr(greenplum.psycopg2, "connect", fake_connect)
+    monkeypatch.setattr(postgres_helpers.psycopg2, "connect", fake_connect)
 
-    conn = greenplum.get_gp_conn()
+    conn = postgres_helpers.get_postgres_conn()
 
     assert conn == "direct_psycopg"
     assert captured_kwargs["port"] == 5435
@@ -128,51 +135,51 @@ def test_get_gp_conn_without_airflow(monkeypatch) -> None:
 def test_assert_orders_table_exists_ok() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=(1,))])
 
-    greenplum.assert_orders_table_exists(conn)
+    postgres_helpers.assert_orders_table_exists(conn)
 
 
 def test_assert_orders_table_exists_missing() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=None)])
 
     with pytest.raises(ValueError):
-        greenplum.assert_orders_table_exists(conn)
+        postgres_helpers.assert_orders_table_exists(conn)
 
 
 def test_assert_orders_schema_ok() -> None:
-    expected = list(greenplum.EXPECTED_ORDERS_SCHEMA)
+    expected = list(postgres_helpers.EXPECTED_ORDERS_SCHEMA)
     conn = FakeConn([FakeCursor(fetchall_value=expected)])
 
-    greenplum.assert_orders_schema(conn)
+    postgres_helpers.assert_orders_schema(conn)
 
 
 def test_assert_orders_schema_mismatch() -> None:
     conn = FakeConn([FakeCursor(fetchall_value=[("order_id", "bigint")])])
 
     with pytest.raises(ValueError):
-        greenplum.assert_orders_schema(conn)
+        postgres_helpers.assert_orders_schema(conn)
 
 
 def test_assert_orders_have_rows_ok() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=(5,))])
 
-    greenplum.assert_orders_have_rows(conn)
+    postgres_helpers.assert_orders_have_rows(conn)
 
 
 def test_assert_orders_have_rows_empty() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=(0,))])
 
     with pytest.raises(ValueError):
-        greenplum.assert_orders_have_rows(conn)
+        postgres_helpers.assert_orders_have_rows(conn)
 
 
 def test_assert_orders_no_duplicates_ok() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=(0,))])
 
-    greenplum.assert_orders_no_duplicates(conn)
+    postgres_helpers.assert_orders_no_duplicates(conn)
 
 
 def test_assert_orders_no_duplicates_detected() -> None:
     conn = FakeConn([FakeCursor(fetchone_value=(3,))])
 
     with pytest.raises(ValueError):
-        greenplum.assert_orders_no_duplicates(conn)
+        postgres_helpers.assert_orders_no_duplicates(conn)

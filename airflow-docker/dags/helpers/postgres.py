@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-LEGACY: Вспомогательные функции для прямого подключения к Greenplum через psycopg2.
+LEGACY: Вспомогательные функции для прямого подключения к Postgres через psycopg2.
 Внимание: этот модуль оставлен только для поддержки базового CSV-пайплайна.
 В новых DAG (ODS/DDS/DM) используйте встроенный в Airflow PostgresOperator
 и штатные механизмы XCom.
@@ -13,10 +13,10 @@ from typing import List, Sequence, Tuple
 
 import psycopg2
 
-# Настройки для подключения к Greenplum. По умолчанию используем Airflow Connection,
-# но при проблемах можно переключиться на ENV-подключение, установив GP_USE_AIRFLOW_CONN=false.
-GP_CONN_ID = os.getenv("GP_CONN_ID", "greenplum_conn")
-GP_USE_AIRFLOW_CONN = os.getenv("GP_USE_AIRFLOW_CONN", "true").lower() in (
+# Настройки для подключения к Postgres. По умолчанию используем Airflow Connection,
+# но при проблемах можно переключиться на ENV-подключение, установив POSTGRES_USE_AIRFLOW_CONN=false.
+POSTGRES_CONN_ID = os.getenv("POSTGRES_CONN_ID", "postgres_training")
+POSTGRES_USE_AIRFLOW_CONN = os.getenv("POSTGRES_USE_AIRFLOW_CONN", "true").lower() in (
     "1",
     "true",
     "yes",
@@ -31,9 +31,9 @@ EXPECTED_ORDERS_SCHEMA: List[Tuple[str, str]] = [
 ]
 
 
-def get_gp_conn():
+def get_postgres_conn():
     """
-    Возвращает psycopg2 connection к Greenplum.
+    Возвращает psycopg2 connection к Postgres.
 
     Приоритет подключения:
     1. Через Airflow Connection (если настроено и доступно)
@@ -42,11 +42,11 @@ def get_gp_conn():
     Returns:
         psycopg2 connection object
     """
-    if GP_USE_AIRFLOW_CONN:
+    if POSTGRES_USE_AIRFLOW_CONN:
         try:
             from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-            hook = PostgresHook(postgres_conn_id=GP_CONN_ID)
+            hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
             logging.info("✅ Подключение через Airflow Connection успешно")
             return conn
@@ -57,14 +57,14 @@ def get_gp_conn():
 
     # Прямое подключение по переменным окружения
     conn_params = {
-        "dbname": os.getenv("GP_DB", "gp_dwh"),
-        "user": os.getenv("GP_USER", "gpadmin"),
-        "password": os.getenv("GP_PASSWORD", ""),
-        "host": os.getenv("GP_HOST", "greenplum"),
-        "port": int(os.getenv("GP_PORT", "5432")),
+        "dbname": os.getenv("POSTGRES_DB", "training"),
+        "user": os.getenv("POSTGRES_USER", "student"),
+        "password": os.getenv("POSTGRES_PASSWORD", "student"),
+        "host": os.getenv("POSTGRES_HOST", "postgres-training"),
+        "port": int(os.getenv("POSTGRES_PORT", "5432")),
     }
     logging.info(
-        "🔗 Подключение к Greenplum: %s:%s/%s",
+        "🔗 Подключение к Postgres: %s:%s/%s",
         conn_params["host"],
         conn_params["port"],
         conn_params["dbname"],
@@ -77,7 +77,7 @@ def assert_orders_table_exists(conn) -> None:
     Проверяет наличие таблицы orders в схеме public.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Raises:
         ValueError: Если таблица не найдена
@@ -93,7 +93,7 @@ def assert_orders_table_exists(conn) -> None:
         )
         if cur.fetchone() is None:
             raise ValueError(
-                "❌ Таблица public.orders не найдена; запусти DAG csv_to_greenplum."
+                "❌ Таблица public.orders не найдена; запусти DAG csv_to_postgres."
             )
     logging.info("✅ Таблица public.orders существует")
 
@@ -103,7 +103,7 @@ def fetch_orders_schema(conn) -> Sequence[Tuple[str, str]]:
     Получает схему таблицы orders из information_schema.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Returns:
         Список кортежей (имя_колонки, тип_данных)
@@ -125,7 +125,7 @@ def assert_orders_schema(conn) -> None:
     Проверяет, что схема таблицы orders соответствует ожидаемой.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Raises:
         ValueError: Если схема не соответствует ожидаемой
@@ -147,7 +147,7 @@ def fetch_orders_count(conn) -> int:
     Получает количество строк в таблице orders.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Returns:
         Количество строк в таблице
@@ -162,7 +162,7 @@ def assert_orders_have_rows(conn) -> None:
     Проверяет, что таблица orders не пустая.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Raises:
         ValueError: Если таблица пустая
@@ -173,7 +173,7 @@ def assert_orders_have_rows(conn) -> None:
 
     if row_count <= 0:
         raise ValueError(
-            "❌ Таблица public.orders пустая — запусти DAG csv_to_greenplum перед проверкой."
+            "❌ Таблица public.orders пустая — запусти DAG csv_to_postgres перед проверкой."
         )
     logging.info("✅ Таблица orders содержит данные (%s строк)", row_count)
 
@@ -183,7 +183,7 @@ def fetch_orders_duplicates(conn) -> int:
     Подсчитывает количество дубликатов по order_id.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Returns:
         Количество дублирующихся order_id
@@ -207,7 +207,7 @@ def assert_orders_no_duplicates(conn) -> None:
     Проверяет, что в таблице нет дублей по order_id.
 
     Args:
-        conn: Подключение к Greenplum
+        conn: Подключение к Postgres
 
     Raises:
         ValueError: Если обнаружены дубликаты

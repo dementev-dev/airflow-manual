@@ -12,3 +12,6 @@ mimesis==15.1.0
 
 # Airflow PostgreSQL provider (used in sql_basic_dag.py and data_processing_dag.py)
 apache-airflow-providers-postgres==5.11.1
+
+# Testing framework
+pytest==7.4.4

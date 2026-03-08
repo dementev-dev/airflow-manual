@@ -4,12 +4,12 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow.operators.python import PythonOperator
-from helpers.greenplum import (
+from helpers.postgres import (
     assert_orders_have_rows,
     assert_orders_no_duplicates,
     assert_orders_schema,
     assert_orders_table_exists,
-    get_gp_conn,
+    get_postgres_conn,
 )
 
 from airflow import DAG
@@ -17,7 +17,7 @@ from airflow import DAG
 
 def _run_check(check_callable):
     """
-    Оборачивает проверку качества данных в контекст подключения к Greenplum.
+    Оборачивает проверку качества данных в контекст подключения к Postgres.
 
     Этот DAG предназначен для автоматической проверки качества данных
     после CSV-пайплайна в таблице public.orders:
@@ -33,7 +33,7 @@ def _run_check(check_callable):
     check_name = check_callable.__name__.replace("assert_", "")
     logging.info("🚀 Запуск проверки: %s", check_name)
 
-    with get_gp_conn() as conn:
+    with get_postgres_conn() as conn:
         check_callable(conn)
 
     logging.info("✅ Проверка пройдена: %s", check_name)
@@ -51,13 +51,13 @@ def _log_dq_summary():
 default_args = {"owner": "airflow", "retries": 1, "retry_delay": timedelta(seconds=30)}
 
 with DAG(
-    dag_id="csv_to_greenplum_dq",
+    dag_id="csv_to_postgres_dq",
     start_date=datetime(2017, 1, 1),
     schedule=None,
     catchup=False,
     default_args=default_args,
-    tags=["demo", "greenplum", "quality", "csv", "dq"],
-    description="Проверки качества данных после CSV → public.orders в Greenplum",
+    tags=["demo", "postgres", "quality", "csv", "dq"],
+    description="Проверки качества данных после CSV → public.orders в Postgres",
 ) as dag:
     # Задача 1: Проверка существования таблицы
     check_exists = PythonOperator(
