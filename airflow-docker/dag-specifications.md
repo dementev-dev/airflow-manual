@@ -89,7 +89,59 @@ id,name,department,salary
 3,Charlie,Sales,48000
 ```
 
-#### 2.2 data_processing_dag.py
+#### 2.2 csv_to_postgres.py
+**Learning Objectives:**
+- Load CSV data into PostgreSQL database
+- Implement data quality checks
+- Use XCom for passing file paths between tasks
+- Work with PostgreSQL connections in Airflow
+
+**Scenario:**
+Generate sample orders data as CSV, load it into PostgreSQL, and verify data quality.
+
+**Tasks:**
+- `create_orders_table`: Create public.orders table in PostgreSQL
+- `generate_csv`: Generate sample orders CSV file
+- `preview_csv`: Display first few rows of CSV
+- `load_csv_to_postgres`: Load CSV data into PostgreSQL using temporary table
+
+**Database Connection:** Uses `postgres_training` connection (auto-provisioned by init script).
+
+**Sample Data Structure:**
+```csv
+order_id,order_ts,customer_id,amount
+1,2023-10-01 10:30:00,101,1250.50
+2,2023-10-01 11:45:00,102,890.00
+3,2023-10-02 09:15:00,103,2100.75
+```
+
+**Data Quality Checks:** See `csv_to_postgres_dq.py` for automated validation.
+
+#### 2.3 csv_to_postgres_dq.py
+**Learning Objectives:**
+- Implement data quality validation in Airflow
+- Use Python functions for data checks
+- Handle data quality failures
+- Separate validation from main ETL pipeline
+
+**Scenario:**
+Run automated data quality checks on the public.orders table after CSV loading.
+
+**Tasks:**
+- `check_table_exists`: Verify public.orders table exists
+- `check_schema`: Validate table schema matches expected structure
+- `check_row_count`: Ensure table has data
+- `check_duplicates`: Verify no duplicate order_id values
+
+**Quality Checks:**
+- Table existence in public schema
+- Column names and data types (order_id, order_ts, customer_id, amount)
+- Minimum row count (> 0)
+- Unique order_id values (no duplicates)
+
+**Helper Functions:** Located in `dags/helpers/postgres.py`.
+
+#### 2.4 data_processing_dag.py
 **Learning Objectives:**
 - ETL pipeline concepts
 - Multiple data sources

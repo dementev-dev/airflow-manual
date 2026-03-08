@@ -4,7 +4,6 @@
 
 ### 1. Docker Compose Structure Problems
 - Duplicate `services:` sections in [`docker-compose.yml`](airflow-docker/docker-compose.yml:1,21)
-- Missing Greenplum service (referenced in dependencies but not defined)
 - Inconsistent container naming
 
 ### 2. Missing Directory Structure
@@ -85,6 +84,7 @@ Create `.env` file with all variables hardcoded:
 - `file_operations_dag.py` - CSV file processing
 
 **Level 2: Intermediate**
+- `csv_to_postgres.py` - CSV to PostgreSQL pipeline with data quality checks
 - `data_processing_dag.py` - ETL pipeline with multiple steps
 - `branching_dag.py` - Conditional task execution
 
