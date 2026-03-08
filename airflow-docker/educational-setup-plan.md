@@ -84,7 +84,8 @@ Create `.env` file with all variables hardcoded:
 - `file_operations_dag.py` - CSV file processing
 
 **Level 2: Intermediate**
-- `csv_to_postgres.py` - CSV to PostgreSQL pipeline with data quality checks
+- `csv_to_postgres.py` - CSV to PostgreSQL pipeline
+- `csv_to_postgres_dq.py` - separate data quality checks for loaded orders
 - `data_processing_dag.py` - ETL pipeline with multiple steps
 - `branching_dag.py` - Conditional task execution
 

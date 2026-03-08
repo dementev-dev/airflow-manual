@@ -92,12 +92,12 @@ id,name,department,salary
 #### 2.2 csv_to_postgres.py
 **Learning Objectives:**
 - Load CSV data into PostgreSQL database
-- Implement data quality checks
+- Implement idempotent loading via temporary table
 - Use XCom for passing file paths between tasks
 - Work with PostgreSQL connections in Airflow
 
 **Scenario:**
-Generate sample orders data as CSV, load it into PostgreSQL, and verify data quality.
+Generate sample orders data as CSV, preview it, and load it into PostgreSQL.
 
 **Tasks:**
 - `create_orders_table`: Create public.orders table in PostgreSQL
@@ -106,6 +106,7 @@ Generate sample orders data as CSV, load it into PostgreSQL, and verify data qua
 - `load_csv_to_postgres`: Load CSV data into PostgreSQL using temporary table
 
 **Database Connection:** Uses `postgres_training` connection (auto-provisioned by init script).
+**Generated Files:** CSV files are written to `/opt/airflow/data/output/`.
 
 **Sample Data Structure:**
 ```csv
@@ -115,7 +116,7 @@ order_id,order_ts,customer_id,amount
 3,2023-10-02 09:15:00,103,2100.75
 ```
 
-**Data Quality Checks:** See `csv_to_postgres_dq.py` for automated validation.
+**Data Quality Checks:** Run `csv_to_postgres_dq.py` after loading to validate the target table.
 
 #### 2.3 csv_to_postgres_dq.py
 **Learning Objectives:**
