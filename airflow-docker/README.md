@@ -96,9 +96,17 @@ airflow-docker/
 │   ├── hello_world_dag.py      # Базовый пример
 │   ├── sql_basic_dag.py        # Работа с SQL
 │   ├── file_operations_dag.py  # Обработка файлов
-│   ├── data_processing_dag.py  # ETL пайплайн
+│   ├── csv_to_postgres.py      # Загрузка CSV в Postgres (ETL)
+│   ├── csv_to_postgres_dq.py   # Проверки качества данных (DQ)
+│   ├── data_processing_dag.py  # Сложный ETL пайплайн
 │   ├── branching_dag.py        # Условная логика
 │   └── error_handling_dag.py   # Обработка ошибок
+├── helpers/                    # Вспомогательные скрипты
+│   └── postgres.py             # Функции для работы с БД и DQ
+├── tests/                      # Unit-тесты для хелперов
+│   └── test_postgres_helpers.py # Тестирование DQ проверок
+├── sql/                        # SQL скрипты и DDL
+│   └── base/                   # Базовые DDL таблиц
 ├── data/                       # Данные для упражнений
 │   ├── input/                  # Входные данные
 │   └── output/                 # Результаты обработки
@@ -129,6 +137,8 @@ airflow-docker/
 
 **Примеры DAG:**
 - `file_operations_dag.py` - работа с файлами
+- `csv_to_postgres.py` - загрузка данных из CSV в PostgreSQL
+- `csv_to_postgres_dq.py` - автоматизированные проверки качества (Data Quality)
 - `data_processing_dag.py` - ETL процессы
 
 ### Продвинутые возможности
@@ -159,8 +169,9 @@ airflow-docker/
 1. **Начните с `hello_world_dag.py`** - освоите основы Airflow
 2. **Перейдите к `sql_basic_dag.py`** - изучите работу с базами данных
 3. **Попрактикуйтесь на `file_operations_dag.py`** - работа с файлами
-4. **Освойте ETL на `data_processing_dag.py`** - обработка данных
-5. **Изучите продвинутые темы** - ветвление и обработка ошибок
+4. **Освойте ETL и DQ на `csv_to_postgres.py` и `csv_to_postgres_dq.py`** - загрузка и валидация данных
+5. **Разберите сложный ETL на `data_processing_dag.py`** - обработка данных
+6. **Изучите продвинутые темы** - ветвление и обработка ошибок
 
 Каждое задание содержит:
 - Цель и сложность выполнения
