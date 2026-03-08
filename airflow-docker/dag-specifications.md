@@ -139,7 +139,7 @@ Run automated data quality checks on the public.orders table after CSV loading.
 - Minimum row count (> 0)
 - Unique order_id values (no duplicates)
 
-**Helper Functions:** Located in `dags/helpers/postgres.py`.
+**Helper Functions:** All DQ check functions are defined directly in `csv_to_postgres_dq.py`.
 
 #### 2.4 data_processing_dag.py
 **Learning Objectives:**

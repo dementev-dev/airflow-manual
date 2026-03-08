@@ -26,7 +26,7 @@ services:
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgmeta:/var/lib/postgresql/data
 

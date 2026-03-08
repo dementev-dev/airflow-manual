@@ -5,15 +5,19 @@ import os
 import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import List
-
 import pandas as pd
 from airflow.operators.python import PythonOperator
-from helpers.postgres import get_postgres_conn
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 from airflow import DAG
 
-CSV_DIR = Path(os.getenv("CSV_DIR", "/opt/airflow/data"))
+POSTGRES_CONN_ID = "postgres_training"
+
+
+def _get_conn():
+    return PostgresHook(postgres_conn_id=POSTGRES_CONN_ID).get_conn()
+
+CSV_DIR = Path(os.getenv("CSV_DIR", "/opt/airflow/data/output"))
 CSV_ROWS = int(os.getenv("CSV_ROWS", "1000"))
 
 
@@ -27,9 +31,13 @@ def _create_table() -> None:
         amount NUMERIC(12,2) NOT NULL
     );
     """
-    with get_postgres_conn() as conn, conn.cursor() as cur:
-        cur.execute(ddl)
-        conn.commit()
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(ddl)
+            conn.commit()
+    finally:
+        conn.close()
 
 
 def _generate_csv(rows: int, csv_dir: Path) -> str:
@@ -93,33 +101,33 @@ def _load_csv(csv_path: str) -> None:
     if not csv_file.exists():
         raise FileNotFoundError(f"CSV не найден: {csv_file}")
 
-    with (
-        get_postgres_conn() as conn,
-        conn.cursor() as cur,
-        csv_file.open("r", encoding="utf-8") as f,
-    ):
-        cur.execute(
-            "CREATE TEMP TABLE tmp_orders (LIKE public.orders INCLUDING DEFAULTS) ON COMMIT DROP;"
-        )
-        cur.copy_expert(
-            "COPY tmp_orders (order_id, order_ts, customer_id, amount) FROM STDIN WITH CSV HEADER",
-            f,
-        )
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur, csv_file.open("r", encoding="utf-8") as f:
+            cur.execute(
+                "CREATE TEMP TABLE tmp_orders (LIKE public.orders INCLUDING DEFAULTS) ON COMMIT DROP;"
+            )
+            cur.copy_expert(
+                "COPY tmp_orders (order_id, order_ts, customer_id, amount) FROM STDIN WITH CSV HEADER",
+                f,
+            )
 
-        cur.execute("SELECT COUNT(*) FROM tmp_orders")
-        tmp_rows = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM tmp_orders")
+            tmp_rows = cur.fetchone()[0]
 
-        cur.execute(
-            """
-            INSERT INTO public.orders(order_id, order_ts, customer_id, amount)
-            SELECT t.order_id, t.order_ts, t.customer_id, t.amount
-            FROM tmp_orders t
-            LEFT JOIN public.orders o ON o.order_id = t.order_id
-            WHERE o.order_id IS NULL
-            """
-        )
-        inserted = cur.rowcount if cur.rowcount != -1 else 0
-        conn.commit()
+            cur.execute(
+                """
+                INSERT INTO public.orders(order_id, order_ts, customer_id, amount)
+                SELECT t.order_id, t.order_ts, t.customer_id, t.amount
+                FROM tmp_orders t
+                LEFT JOIN public.orders o ON o.order_id = t.order_id
+                WHERE o.order_id IS NULL
+                """
+            )
+            inserted = cur.rowcount if cur.rowcount != -1 else 0
+            conn.commit()
+    finally:
+        conn.close()
 
     logging.info("Загружено строк: %s (прочитано из CSV: %s)", inserted, tmp_rows)
 
@@ -128,7 +136,7 @@ default_args = {"owner": "airflow", "retries": 1, "retry_delay": timedelta(secon
 
 with DAG(
     dag_id="csv_to_postgres",
-    start_date=datetime(2017, 1, 1),
+    start_date=datetime(2023, 1, 1),
     schedule=None,
     catchup=False,
     default_args=default_args,

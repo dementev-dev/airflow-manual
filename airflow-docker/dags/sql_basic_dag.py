@@ -56,7 +56,7 @@ TRUNCATE TABLE students_sample;
 # Определение задач
 create_table_task = PostgresOperator(
     task_id='create_table',
-    postgres_conn_id='postgres_training',  # Это соединение нужно будет создать вручную в Airflow UI
+    postgres_conn_id='postgres_training',  # Соединение создается автоматически в airflow-init
     sql=create_table_sql,
     dag=dag
 )

@@ -36,7 +36,7 @@ docker-compose up -d
   - Пользователь: `student`
   - Пароль: `student`
 
-- **PostgreSQL для метаданных Airflow**: `localhost:5433`
+- **PostgreSQL для метаданных Airflow**: `localhost:5434`
   - База данных: `airflow`
   - Пользователь: `airflow`
   - Пароль: `airflow`
@@ -101,15 +101,9 @@ airflow-docker/
 │   ├── data_processing_dag.py  # Сложный ETL пайплайн
 │   ├── branching_dag.py        # Условная логика
 │   └── error_handling_dag.py   # Обработка ошибок
-├── helpers/                    # Вспомогательные скрипты
-│   └── postgres.py             # Функции для работы с БД и DQ
-├── tests/                      # Unit-тесты для хелперов
-│   └── test_postgres_helpers.py # Тестирование DQ проверок
-├── sql/                        # SQL скрипты и DDL
-│   └── base/                   # Базовые DDL таблиц
-├── data/                       # Данные для упражнений
+├── data/                       # Данные и артефакты прогонов
 │   ├── input/                  # Входные данные
-│   └── output/                 # Результаты обработки
+│   └── output/                 # Сгенерированные CSV, отчеты и результаты обработки
 ├── logs/                       # Логи Airflow
 ├── README.md                   # Эта инструкция
 └── educational-tasks.md        # Практические задания для студентов
@@ -199,12 +193,14 @@ airflow-docker/
 docker-compose exec airflow-webserver airflow connections get postgres_training
 ```
 
+`csv_to_postgres.py` по умолчанию складывает сгенерированные CSV в `/opt/airflow/data/output`, то есть в локальный каталог `airflow-docker/data/output/`.
+
 
 ### Порты
 
 - `8080` - Airflow Webserver
 - `5432` - PostgreSQL для тренировок
-- `5433` - PostgreSQL для метаданных Airflow
+- `5434` - PostgreSQL для метаданных Airflow
 
 ## 🛠️ Управление стендом
 

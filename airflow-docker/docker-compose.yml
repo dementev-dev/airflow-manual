@@ -61,7 +61,6 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
-      - ./tests:/opt/airflow/tests
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -83,7 +82,6 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
-      - ./tests:/opt/airflow/tests
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -102,7 +100,6 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
-      - ./tests:/opt/airflow/tests
     command: >
       bash -ceuo pipefail "
         mkdir -p /opt/airflow/data &&
