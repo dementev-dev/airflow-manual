@@ -1,3 +1,15 @@
+"""
+DAG для загрузки CSV-данных в PostgreSQL
+Уровень: Средний
+
+Этот DAG демонстрирует типичный паттерн загрузки данных из файлов в БД:
+1. Создание целевой таблицы public.orders (если не существует)
+2. Генерация CSV с заказами (order_id, order_ts, customer_id, amount) через pandas
+3. Предпросмотр CSV (head + describe) для контроля
+4. Загрузка в PostgreSQL через временную таблицу и anti-join (защита от дубликатов)
+
+Результат: данные в таблице public.orders учебной БД postgres_training.
+"""
 from __future__ import annotations
 
 import logging
@@ -5,7 +17,7 @@ import os
 import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import pandas as pd
+
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
@@ -42,6 +54,7 @@ def _create_table() -> None:
 
 def _generate_csv(rows: int, csv_dir: Path) -> str:
     """Генерирует CSV c заказами с помощью pandas и сохраняет на диск."""
+    import pandas as pd
     csv_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     csv_path = csv_dir / f"orders_{timestamp}.csv"
@@ -80,6 +93,7 @@ def _generate_csv(rows: int, csv_dir: Path) -> str:
 
 def _preview_csv(csv_path: str, sample_rows: int = 5) -> None:
     """Отображает предпросмотр CSV через pandas (head и describe)."""
+    import pandas as pd
     df = pd.read_csv(csv_path)
     df["order_ts"] = pd.to_datetime(df["order_ts"], errors="coerce")
     logging.info(

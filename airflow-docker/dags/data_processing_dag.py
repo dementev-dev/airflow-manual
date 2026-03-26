@@ -1,12 +1,20 @@
 """
 DAG для демонстрации ETL процессов в Airflow
 Уровень: Средний-Продвинутый
+
+Этот DAG реализует классический ETL-пайплайн:
+1. Создание тестовых данных (клиенты + заказы) в CSV
+2. Параллельное извлечение (Extract) клиентов и заказов
+3. Трансформация (Transform) — объединение таблиц, вычисляемые поля
+4. Загрузка (Load) — подготовка SQL для вставки в БД
+5. Генерация текстового отчёта со статистикой
+
+Результат: файлы в /opt/airflow/data/output/ (extracted_*, transformed_data.csv, report.txt).
 """
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
-import pandas as pd
 
 # Определение DAG
 default_args = {
@@ -30,6 +38,7 @@ dag = DAG(
 
 def create_sample_data():
     """Создание примерных данных для ETL процесса"""
+    import pandas as pd
     # Создаем файлы с данными клиентов и заказов
     customers_data = {
         'customer_id': [1, 2, 3, 4, 5],
@@ -55,6 +64,7 @@ def create_sample_data():
 
 def extract_customers():
     """Извлечение данных клиентов"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/input/customers.csv')
     print(f"Извлечено {len(df)} записей клиентов")
     
@@ -64,6 +74,7 @@ def extract_customers():
 
 def extract_orders():
     """Извлечение данных заказов"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/input/orders.csv')
     print(f"Извлечено {len(df)} записей заказов")
     
@@ -73,6 +84,7 @@ def extract_orders():
 
 def transform_data():
     """Преобразование данных - объединение клиентов и заказов"""
+    import pandas as pd
     customers_df = pd.read_csv('/opt/airflow/data/input/customers.csv')
     orders_df = pd.read_csv('/opt/airflow/data/input/orders.csv')
     
@@ -91,6 +103,7 @@ def transform_data():
 
 def load_to_database():
     """Загрузка данных в базу данных (симуляция)"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/output/transformed_data.csv')
     
     # В реальном сценарии здесь был бы код для загрузки в базу данных
@@ -120,6 +133,7 @@ def load_to_database():
 
 def generate_report():
     """Генерация отчета"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/output/transformed_data.csv')
     
     # Создаем простой отчет

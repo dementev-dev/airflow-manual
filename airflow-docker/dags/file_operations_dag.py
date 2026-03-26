@@ -2,13 +2,14 @@
 DAG для демонстрации работы с файлами в Airflow
 Уровень: Средний
 
-Этот DAG генерирует русскоязычные данные с использованием библиотеки mimesis, включая:
-- ФИО (с учетом пола)
-- Возраст
-- Зарплату
-- Адрес проживания
+Этот DAG показывает полный цикл работы с файлами:
+1. Генерация русскоязычных данных (ФИО, возраст, профессия, зарплата, адрес) с помощью mimesis
+2. Валидация CSV-файла (проверка колонок, диапазонов, пустых значений)
+3. Трансформация (добавление категорий зарплат, возрастных групп, извлечение города)
+4. Формирование текстовой сводки со статистикой
+
+Результат: файлы sample_data.csv, processed_data.csv и summary.txt в /opt/airflow/data/
 """
-import pandas as pd
 import os
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -56,6 +57,7 @@ def generate_sample_data():
         'id': range(1, 101),
         'name': names,
         'age': ages,
+        'occupation': occupations,
         'salary': [max(30000, min(150000, ages[i] * 1200 + (hash(names[i]) % 15000) - 5000)) for i in range(100)],
         'address': [address.address() for _ in range(100)]
     }
@@ -68,6 +70,7 @@ def generate_sample_data():
 
 def read_and_validate_data():
     """Чтение и валидация CSV файла"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/input/sample_data.csv')
     print(f"Прочитан файл: {len(df)} строк, {len(df.columns)} столбцов")
     print(f"Колонки: {list(df.columns)}")
@@ -87,6 +90,7 @@ def read_and_validate_data():
 
 def transform_data():
     """Преобразование данных"""
+    import pandas as pd
     import os
     df = pd.read_csv('/opt/airflow/data/input/sample_data.csv')
     
@@ -115,6 +119,7 @@ def transform_data():
 
 def write_summary():
     """Создание сводки по обработанным данным"""
+    import pandas as pd
     df = pd.read_csv('/opt/airflow/data/output/processed_data.csv')
     
     summary = {
