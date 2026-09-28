@@ -107,11 +107,13 @@ dag = DAG('greeting_dag',
            start_date=datetime(2023, 1, 1),
            catchup=False)
 
-start_task = DummyOperator(task_id='start_process', retries=2)
-greeting_task = PythonOperator(task_id='greeting_task', python_callable=greet_user)
+start_task = DummyOperator(task_id='start_process', retries=2, dag=dag)
+greeting_task = PythonOperator(task_id='greeting_task', python_callable=greet_user, dag=dag)
 
 start_task >> greeting_task
 ```
+
+Параметр `dag=dag` связывает каждый оператор с созданным DAG. Если объявить задачи внутри `with DAG(...) as dag:`, привязка произойдет автоматически. Стрелка `>>` задает порядок выполнения задач.
 
 В этом примере задача `greeting_task` использует `PythonOperator` для запуска функции `greet_user`, которая выводит приветственное сообщение в логи.
 

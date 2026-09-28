@@ -2,7 +2,7 @@
 
 В этом материале мы познакомимся с управлением ресурсами через пулы задач, обменом данными между задачами через XCom, группировкой задач с помощью TaskGroup и настройкой системы оповещений (алертинга) в Airflow.
 
-Начнем с улучшения нашего базового пайплайна — проведем рефакторинг кода для лучшей читаемости и поддержки.
+Опыты с этими возможностями собраны в [блоке 8 практики](educational-tasks.md#resources); callback и ошибки разобраны в [блоке 7](educational-tasks.md#errors).
 
 ## Управление ресурсами с помощью пулов задач
 
@@ -151,72 +151,62 @@ XCom упрощает взаимодействие между задачами �
 
 ## Группировка задач с помощью TaskGroup
 
-Для удобства визуализации задачи можно группировать в веб-интерфейсе Airflow (начиная с версии 2.0). Повторяющиеся или логически связанные задачи можно объединить в группы:
+TaskGroup объединяет задачи в сворачиваемую группу на графе. Зависимости и состояния остаются у отдельных задач. Группировку задают в Python-коде; UI позволяет раскрыть ее и посмотреть содержимое.
 
-В этом примере задачи сгруппированы в три логические группы: 'data_extraction', 'data_transformation' и 'data_loading'. Каждая группа содержит несколько задач, которые выполняются последовательно внутри группы. Затем группы связаны между собой, чтобы показать общий порядок выполнения этапов обработки данных.
+В примере три группы. Внутри каждой задачи идут последовательно. Группы извлечения и преобразования независимы, а загрузка ждет завершения обеих. `EmptyOperator` ничего не обрабатывает: здесь мы смотрим только на устройство графа.
 
 ```python
-with TaskGroup("data_extraction") as extraction_group:
-    extract_1 = DummyOperator(task_id="extract_source_1")
-    extract_2 = DummyOperator(task_id="extract_source_2")
-    extract_3 = DummyOperator(task_id="extract_source_3")
-    extract_1 >> extract_2 >> extract_3
+from datetime import datetime
 
-with TaskGroup("data_transformation") as transformation_group:
-    transform_1 = DummyOperator(task_id="transform_step_1")
-    transform_2 = DummyOperator(task_id="transform_step_2")
-    transform_1 >> transform_2
+from airflow import DAG
+from airflow.operators.empty import EmptyOperator
+from airflow.utils.task_group import TaskGroup
 
-with TaskGroup("data_loading") as loading_group:
-    load_1 = DummyOperator(task_id="load_to_target_1")
-    load_2 = DummyOperator(task_id="load_to_target_2")
-    load_1 >> load_2
+with DAG(
+    dag_id="task_group_example",
+    start_date=datetime(2023, 1, 1),
+    schedule=None,
+    catchup=False,
+) as dag:
+    with TaskGroup("data_extraction") as extraction_group:
+        extract_1 = EmptyOperator(task_id="extract_source_1")
+        extract_2 = EmptyOperator(task_id="extract_source_2")
+        extract_3 = EmptyOperator(task_id="extract_source_3")
+        extract_1 >> extract_2 >> extract_3
 
-[extraction_group, transformation_group] >> loading_group
+    with TaskGroup("data_transformation") as transformation_group:
+        transform_1 = EmptyOperator(task_id="transform_step_1")
+        transform_2 = EmptyOperator(task_id="transform_step_2")
+        transform_1 >> transform_2
+
+    with TaskGroup("data_loading") as loading_group:
+        load_1 = EmptyOperator(task_id="load_to_target_1")
+        load_2 = EmptyOperator(task_id="load_to_target_2")
+        load_1 >> load_2
+
+    [extraction_group, transformation_group] >> loading_group
 ```
 
-Обратите внимание: при использовании TaskGroup последовательность задач указывается внутри группы после объявления всех задач, а в конце DAG описывается последовательность выполнения самих групп.
+Здесь TaskGroup создается внутри `with DAG(...)`, поэтому группа и ее задачи получают один DAG. При отдельном объявлении `dag = DAG(...)` группу нужно привязать явно: `TaskGroup("data_extraction", dag=dag)`.
 
-Ниже приведена упрощённая схема зависимостей между тремя группами задач:
+Схема повторяет зависимости из кода:
 
 ```mermaid
 flowchart LR
-
-  %% group1
-  subgraph G1["group1"]
-    g1_t1["task1"]
-    g1_t2["task2"]
-    g1_t3["task3"]
-
-    g1_t1 --> g1_t2
-    g1_t1 --> g1_t3
+  subgraph extraction["data_extraction"]
+    e1["extract_source_1"] --> e2["extract_source_2"] --> e3["extract_source_3"]
   end
-
-  %% group2
-  subgraph G2["group2"]
-    g2_t1["task1"]
-    g2_t2["task2"]
-
-    g2_t1 --> g2_t2
+  subgraph transformation["data_transformation"]
+    t1["transform_step_1"] --> t2["transform_step_2"]
   end
-
-  %% group3
-  subgraph G3["group3"]
-    g3_t1["task1"]
-    g3_t2["task2"]
-
-    g3_t1 --> g3_t2
+  subgraph loading["data_loading"]
+    l1["load_to_target_1"] --> l2["load_to_target_2"]
   end
-
-  %% зависимости между группами
-  g1_t2 --> g3_t1
-  g1_t3 --> g3_t1
-  g2_t2 --> g3_t1
+  e3 --> l1
+  t2 --> l1
 ```
 
-Визуально в интерфейсе Airflow группы задач отображаются как один узел с небольшим индикатором. Клик по нему разворачивает или сворачивает вложенные задачи, что значительно улучшает восприятие DAG с большим количеством задач и связей, особенно когда в них десятки и сотни задач.
-
-TaskGroup — это удобный способ логической группировки задач, который помогает упростить код и представить сложные пайплайны более компактно.
+Для запуска сохраните пример в `airflow-docker/dags/task_group_example_dag.py`. После ручного запуска все семь задач должны завершиться успешно. Нажмите название группы со стрелкой, чтобы раскрыть ее. Полный идентификатор первой задачи - `data_extraction.extract_source_1`: имя группы становится префиксом `task_id`. Такой идентификатор нужен при обращении к задаче через XCom.
 
 ## Система оповещений (алертинг)
 
@@ -285,174 +275,12 @@ def notify_success(context):
 
 Проверка: сначала воспроизведите окончательный отказ, затем успешный запуск. Сверьте текст каждого письма с состоянием соответствующего DAG Run. Упражнения находятся в [блоке ошибок](educational-tasks.md#errors) и [задании на почту](educational-tasks.md#resources).
 
-## Практическое применение: улучшенный DAG
+## Практика на учебном стенде
 
-Теперь применим изученные концепции для усовершенствования нашего DAG. Добавим переменные и разобьем задачи на логические группы.
+Откройте [resource_management_dag.py](airflow-docker/dags/resource_management_dag.py). Он имитирует чтение двух источников и передает небольшие результаты через XCom. Для запуска нужен пул `training_pool` с двумя слотами; создайте его в Admin > Pools.
 
-Сначала создадим переменную `DATABASE_URL` со строкой подключения к базе данных через веб-интерфейс Airflow и импортируем ее в коде DAG:
+В исходном DAG задачи `read_customers` и `read_orders` не зависят друг от друга, но занимают два и один слот соответственно. Поэтому они выполняются последовательно. `calculate_metrics` получает их результаты через `xcom_pull`, а `log_metrics` пишет в лог словарь `customers=20`, `orders=30`.
 
-В этом примере используется переменная 'database_connection_string', предварительно созданная в интерфейсе Airflow, для хранения строки подключения к базе данных. Это позволяет избежать жесткого кодирования конфиденциальной информации в коде DAG и упрощает настройку подключения для разных окружений.
+В [заданиях 8.1-8.3](educational-tasks.md#resources) вы измените вес задачи в пуле, добавите метрику и объедините задачи чтения в TaskGroup. Там описаны изменения, ожидаемые результаты и места проверки. Файлы CSV и подключение к БД для этого примера не нужны: чтение источников имитируется.
 
-```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.utils.task_group import TaskGroup
-from airflow.models import Variable
-from sqlalchemy import create_engine
-
-DATABASE_URL = Variable.get('database_connection_string')
-
-args = {
-    'owner': 'analytics_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-}
-
-# функции для обработки данных
-def get_file_path(file_name):
-    return os.path.join(os.path.expanduser('~/data'), file_name)
-
-def load_customer_data():
-    file_path = get_file_path('customer_data.csv')
-    df = pd.read_csv(file_path)
-    engine = create_engine(DATABASE_URL)
-    df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
-
-def aggregate_customer_data():
-    engine = create_engine(DATABASE_URL)
-    customer_df = pd.read_sql('select * from staging.customers', con=engine)
-    
-    df = customer_df.groupby(['region', 'category']).agg(
-            total_orders=('orders', 'sum'),
-            avg_amount=('amount', 'mean')
-        ).reset_index()
-    
-    df.to_sql('customer_summary', engine, index=False, if_exists='replace', schema='analytics')
-
-dag = DAG(
-    dag_id='customer_pipeline_enhanced',
-    schedule_interval=None,
-    default_args=args,
-)
-```
-
-Теперь разобьем задачи на логические группы и добавим Jinja-шаблоны для доступа к контексту выполнения:
-
-В этом примере создается начальная задача 'pipeline_start', которая использует Jinja-шаблоны для вывода информации о запуске DAG, включая идентификатор запуска (run_id) и информацию о DAG Run. Затем задачи группируются в логическую группу 'data_processing_stage', что улучшает структуру и читаемость DAG.
-
-```python
-# Начальная задача с информацией о запуске
-start_task = BashOperator(
-    task_id='pipeline_start',
-    bash_command='echo "Pipeline started! Run ID: {{ run_id }} | DAG Run: {{ dag_run }}"',
-    dag=dag,
-)
-
-# Группа задач по предварительной обработке данных
-with TaskGroup(group_id="data_processing_stage") as data_processing:
-    # Загрузка данных
-    load_customer_dataset = PythonOperator(
-        task_id='load_customer_data',
-        python_callable=load_customer_data,
-        dag=dag,
-    )
-    # Агрегация и запись данных
-    aggregate_customer_dataset = PythonOperator(
-        task_id='aggregate_customer_data',
-        python_callable=aggregate_customer_data,
-        dag=dag,
-    )
-    load_customer_dataset >> aggregate_customer_dataset
-
-# Установка последовательности выполнения
-start_task >> data_processing
-```
-
-Поскольку последовательность задач внутри групп указывается при их создании, в конце необходимо определить порядок выполнения самих групп, чтобы планировщик понимал общую логику выполнения.
-
-Итоговый DAG будет выглядеть следующим образом:
-
-```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.utils.task_group import TaskGroup
-from airflow.models import Variable
-from sqlalchemy import create_engine
-
-DATABASE_URL = Variable.get('database_connection_string')
-
-args = {
-    'owner': 'analytics_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-}
-
-def get_file_path(file_name):
-    return os.path.join(os.path.expanduser('~/data'), file_name)
-
-def load_customer_data():
-    file_path = get_file_path('customer_data.csv')
-    df = pd.read_csv(file_path)
-    engine = create_engine(DATABASE_URL)
-    df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
-
-def aggregate_customer_data():
-    engine = create_engine(DATABASE_URL)
-    customer_df = pd.read_sql('select * from staging.customers', con=engine)
-    
-    df = customer_df.groupby(['region', 'category']).agg(
-            total_orders=('orders', 'sum'),
-            avg_amount=('amount', 'mean')
-        ).reset_index()
-    
-    df.to_sql('customer_summary', engine, index=False, if_exists='replace', schema='analytics')
-
-dag = DAG(
-    dag_id='customer_pipeline_enhanced',
-    schedule_interval=None,
-    default_args=args,
-)
-
-# Начальная задача
-start_task = BashOperator(
-    task_id='pipeline_start',
-    bash_command='echo "Pipeline started! Run ID: {{ run_id }} | DAG Run: {{ dag_run }}"',
-    dag=dag,
-)
-
-# Группа предварительной обработки
-with TaskGroup(group_id="data_processing_stage") as data_processing:
-    load_customer_dataset = PythonOperator(
-        task_id='load_customer_data',
-        python_callable=load_customer_data,
-        dag=dag,
-    )
-    aggregate_customer_dataset = PythonOperator(
-        task_id='aggregate_customer_data',
-        python_callable=aggregate_customer_data,
-        dag=dag,
-    )
-    load_customer_dataset >> aggregate_customer_dataset
-
-start_task >> data_processing
-```
-
-В этом материале мы рассмотрели расширенные возможности Airflow, которые помогут улучшить работу ваших пайплайнов:
-- Управление ресурсами с помощью пулов задач
-- Обмен данными между задачами через XCom
-- Логическая группировка задач с TaskGroup
-- Настройка системы оповещений
-
-Помните: не стоит использовать все доступные функции сразу. Выбирайте инструменты последовательно и находите оптимальный набор возможностей под конкретную задачу.
+Для опытов с callback используйте [error_handling_dag.py](airflow-docker/dags/error_handling_dag.py) и [блок 7](educational-tasks.md#errors). Отправка настоящей почты остается заданием по желанию.

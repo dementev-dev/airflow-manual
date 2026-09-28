@@ -10,14 +10,23 @@
 
 | Блок | Примеры | Что наблюдаем | Перед практикой |
 |---|---|---|---|
-| [1. Первый DAG](#first-dag) | `hello_world_dag.py` | Задачи, зависимости, операторы, расписание | Главы 4, 5 и 8 |
-| [2. SQL и подключения](#sql) | `sql_basic_dag.py` | Connection, SQL, ошибка подключения | Глава 7 |
+| [1. Первый DAG](#first-dag) | `hello_world_dag.py` | Задачи, зависимости, операторы, расписание | Главы 4 и 5; для 1.3 - [расписания][schedules] |
+| [2. SQL и подключения](#sql) | `sql_basic_dag.py` | Connection, SQL, ошибка подключения | [Подключения][connections] |
 | [3. Работа с файлами](#files) | `file_operations_dag.py` | Результаты отдельных задач | Главы 5 и 6 |
-| [4. Загрузка и DQ](#load-dq) | `csv_to_postgres.py`, `csv_to_postgres_dq.py` | XCom, данные в БД, ошибка проверки | Главы 6, 7 и 9 |
+| [4. Загрузка и DQ](#load-dq) | `csv_to_postgres.py`, `csv_to_postgres_dq.py` | XCom, данные в БД, ошибка проверки | Глава 6, [шаблоны][templates] и [XCom][xcom] |
 | [5. Разбор ETL](#etl) | `data_processing_dag.py` | Параллельные шаги и путь данных | Глава 5 |
-| [6. Ветвление](#branching) | `branching_dag.py` | Variables, выбранная ветка, `skipped` | Главы 6 и 7 |
-| [7. Ошибки и повторы](#errors) | `error_handling_dag.py` | Попытки, обработчики, итог запуска | Главы 6 и 9 |
-| [8. Пулы и группировка](#resources) | `resource_management_dag.py` | Слоты, XCom, TaskGroup | Глава 9 |
+| [6. Ветвление](#branching) | `branching_dag.py` | Variables, выбранная ветка, `skipped` | Глава 6 и [Variables][variables] |
+| [7. Ошибки и повторы](#errors) | `error_handling_dag.py` | Попытки, обработчики, итог запуска | Глава 6; для 7.B - [callback][alerts] |
+| [8. Пулы и группировка](#resources) | `resource_management_dag.py` | Слоты, XCom, TaskGroup | [Пулы][pools], [XCom][xcom] и [TaskGroup][taskgroups] |
+
+[schedules]: 08%20-%20Управление%20временем.md#настройка-автоматических-запусков
+[connections]: 07%20-%20Шаблоны,%20переменные%20и%20подключения%20в%20Airflow.md#централизованные-подключения-connections
+[templates]: 07%20-%20Шаблоны,%20переменные%20и%20подключения%20в%20Airflow.md#динамические-шаблоны-airflow-на-основе-jinja
+[variables]: 07%20-%20Шаблоны,%20переменные%20и%20подключения%20в%20Airflow.md#безопасные-переменные-variables
+[xcom]: 09%20-%20Пулы,%20XCom,%20TaskGroup%20и%20алертинг%20в%20Airflow.md#обмен-данными-между-задачами-xcom-и-контекст-выполнения
+[pools]: 09%20-%20Пулы,%20XCom,%20TaskGroup%20и%20алертинг%20в%20Airflow.md#управление-ресурсами-с-помощью-пулов-задач
+[taskgroups]: 09%20-%20Пулы,%20XCom,%20TaskGroup%20и%20алертинг%20в%20Airflow.md#группировка-задач-с-помощью-taskgroup
+[alerts]: 09%20-%20Пулы,%20XCom,%20TaskGroup%20и%20алертинг%20в%20Airflow.md#система-оповещений-алертинг
 
 Главы доступны в [оглавлении учебника](README.md). Инструкция запуска и параметры учебной БД находятся в [README стенда](airflow-docker/README.md), файлы примеров - в [airflow-docker/dags/](airflow-docker/dags/).
 

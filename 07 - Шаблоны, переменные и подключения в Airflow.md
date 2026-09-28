@@ -8,44 +8,52 @@
 
 Синтаксис шаблонов интуитивно понятен — переменная заключается в двойные фигурные скобки с пробелами по краям. Для эффективного использования достаточно знать, какое значение возвращает конкретный шаблон, и разместить его в нужном месте кода.
 
-Подробный справочник доступных шаблонов можно найти в [официальной документации Airflow](https://airflow.apache.org/docs/apache-airflow/stable/templates-ref.html#variables).
+Подробный справочник доступных шаблонов можно найти в [документации Airflow 2.9.2](https://airflow.apache.org/docs/apache-airflow/2.9.2/templates-ref.html#variables).
 
-Вот практические примеры использования:
+Каждый пример ниже - отдельный DAG. Для запуска сохраните один блок кода в файл `.py` внутри `airflow-docker/dags/`. Затем найдите DAG в UI и запустите его вручную.
 
 **Передача даты выполнения в задачу:**
 
-В этом примере создается DAG с идентификатором "template_example", который запускается каждые 15 минут. Задача "display_date" использует шаблон {{ ds }} для вывода текущей даты выполнения в формате YYYY-MM-DD.
+В этом примере DAG `template_example` запускается каждые 15 минут. Задача `display_date` выводит логическую дату запуска в формате YYYY-MM-DD через шаблон `{{ ds }}`.
 ```python
-...
+from datetime import datetime
+
+from airflow import DAG
+from airflow.operators.bash import BashOperator
 
 dag = DAG(
     dag_id="template_example",
     schedule_interval="*/15 * * * *",
-    default_args=default_args
-) 
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+)
 
-t1 = BashOperator(task_id="display_date", bash_command="echo {{ ds }}")
-
-t1
+t1 = BashOperator(task_id="display_date", bash_command="echo {{ ds }}", dag=dag)
 ```
 
 **Использование шаблонов для лучшей отслеживаемости задач:**
 
 В этом примере создается DAG с идентификатором "template_tracking_example", который запускается каждые 20 минут. Вторая задача использует шаблон {{ ds }} в команде bash, чтобы явно указывать дату обработки в логах.
 ```python
-...
+from datetime import datetime
+
+from airflow import DAG
+from airflow.operators.bash import BashOperator
 
 dag = DAG(
     dag_id="template_tracking_example",
     schedule_interval="*/20 * * * *",
-    default_args=default_args
-) 
+    start_date=datetime(2023, 1, 1),
+    catchup=False,
+)
 
-t1 = BashOperator(task_id="show_date", bash_command="echo {{ ds }}")
-t2 = BashOperator(task_id="process_for_date", bash_command="echo Processing for {{ ds }}")
+t1 = BashOperator(task_id="show_date", bash_command="echo {{ ds }}", dag=dag)
+t2 = BashOperator(task_id="process_for_date", bash_command="echo Processing for {{ ds }}", dag=dag)
 
 t1 >> t2
 ```
+
+В первом DAG одна задача, во втором - две связанные задачи. В Details выбранной задачи откройте Rendered Templates: вместо `{{ ds }}` будет дата. Та же дата появится в логе после запуска. Привязку операторов к DAG здесь задает `dag=dag`.
 
 # Безопасные переменные (Variables)
 
@@ -134,69 +142,62 @@ task = BashOperator(
 - Системы уведомлений (Email, Telegram)
 - И многие другие через Airflow Providers
 
-При использовании операторов, взаимодействующих с внешними системами, Airflow автоматически ищет соответствующее подключение с суффиксом `_default`. Однако можно явно указать альтернативное подключение:
+Оператор получает настройки по идентификатору подключения. Например, `PostgresOperator` использует параметр `postgres_conn_id`. PostgreSQL provider уже установлен в учебном стенде.
 
-В приведенном примере используется PostgresOperator для создания таблицы в базе данных. Вместо использования подключения по умолчанию, явно указывается подключение с идентификатором 'my_postgres_conn'.
-
-```python
-from airflow.providers.postgres.operators.postgres import PostgresOperator
-
-create_table = PostgresOperator(
-    task_id='create_user_table',
-    sql='''
-        CREATE TABLE users(
-        user_id integer NOT NULL,
-        created_at TIMESTAMP NOT NULL
-        );''',
-    postgres_conn_id='my_postgres_conn'
-)
-```
-
-Управление подключениями доступно через интерфейс Airflow (Admin → Connections). Если требуемый тип подключения отсутствует, его можно добавить установкой соответствующего Airflow Provider из [официального репозитория](https://airflow.apache.org/docs/#providers-packages-docs-apache-airflow-providers-index-html).
-
-Управление подключениями доступно через интерфейс Airflow (раздел **Admin → Connections**). Подключения хранятся в метадатабазе Airflow, а пароли и другие чувствительные поля шифруются с помощью Fernet и маскируются в UI и логах.
+Подключения хранятся в базе метаданных Airflow. Пароли и другие чувствительные поля шифруются с помощью Fernet и маскируются в UI и логах.
 
 ### Как создать подключение к PostgreSQL через UI
 
-Интерфейс ниже соответствует Airflow 2.9.x и стандартному Docker-стенду из документации:
+Используйте учебную БД из [README стенда](airflow-docker/README.md#запуск). В контейнере Airflow она доступна по имени сервиса `postgres-training`; адрес `localhost:5432` предназначен для подключения с вашего компьютера.
 
-1. Откройте веб-интерфейс Airflow.
-2. В верхнем меню выберите **Admin → Connections**.
-3. В правом верхнем углу нажмите кнопку **+ Add a new record**.
-4. В форме укажите параметры:
+1. Откройте **Admin > Connections** и нажмите **+ Add a new record**.
+2. Заполните форму:
 
-   - **Connection Id**: `my_postgres_conn`  
-     Это имя мы будем использовать в коде DAG (параметр `postgres_conn_id`).
+   - **Connection Id**: `my_postgres_conn`. Это имя будет указано в коде DAG.
    - **Connection Type**: `Postgres`
-   - **Host**: `postgres`  
-     (так называется контейнер PostgreSQL в типовом `docker-compose.yaml` из официальной инструкции).
-   - **Schema**: `airflow`  
-     (имя базы данных; в учебном стенде можно использовать стандартную БД).
-   - **Login**: `airflow`
-   - **Password**: `airflow`
+   - **Host**: `postgres-training`
+   - **Database / Schema**: `training`
+   - **Login**: `student`
+   - **Password**: `student`
    - **Port**: `5432`
 
-5. Нажмите кнопку **Test** (если доступна) — Airflow попробует подключиться к базе.
-6. Если тест успешен, нажмите **Save**.
+3. Нажмите **Save**. Кнопка **Test** может быть отключена в конфигурации Airflow; подключение можно проверить запуском DAG ниже.
 
-Теперь подключение с идентификатором `my_postgres_conn` доступно во всех DAG’ах. В примере ниже PostgresOperator явно использует это подключение:
+База `airflow` на сервисе `postgres-metadata` хранит служебные данные Airflow. Для учебных таблиц используйте `training`.
+
+Сохраните пример в `airflow-docker/dags/connection_example_dag.py` и запустите `connection_example` через UI:
 
 ```python
+from datetime import datetime
+
+from airflow import DAG
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 
-create_table = PostgresOperator(
-    task_id="create_user_table",
-    sql="""
-        CREATE TABLE users(
-            user_id    INTEGER      NOT NULL,
-            created_at TIMESTAMP    NOT NULL
-        );
-    """,
-    postgres_conn_id="my_postgres_conn",
-)
+with DAG(
+    dag_id="connection_example",
+    start_date=datetime(2023, 1, 1),
+    schedule=None,
+    catchup=False,
+) as dag:
+    create_table = PostgresOperator(
+        task_id="create_user_table",
+        sql="""
+            CREATE TABLE IF NOT EXISTS public.connection_demo_users (
+                user_id INTEGER NOT NULL,
+                created_at TIMESTAMP NOT NULL
+            );
+        """,
+        postgres_conn_id="my_postgres_conn",
+    )
 ```
 
-Для успешной работы с внешними системами сначала необходимо создать соответствующее подключение, а затем использовать его идентификатор в операторах вашего DAG.
+Задача должна завершиться успешно. В учебной БД появится пустая таблица `public.connection_demo_users`; повторный запуск сохранит ее. Проверить наличие таблицы можно из SQL-консоли стенда:
+
+```sql
+SELECT to_regclass('public.connection_demo_users');
+```
+
+Результат - `connection_demo_users`. Если задача упала, откройте ее лог и сверьте Conn Id в коде с именем подключения, затем Host и остальные поля формы. Правка настроек действует при следующем выполнении задачи.
 
 Более подробную информацию о настройке подключений можно найти в
 [документации Airflow](https://airflow.apache.org/docs/apache-airflow/2.9.3/howto/connection.html).
