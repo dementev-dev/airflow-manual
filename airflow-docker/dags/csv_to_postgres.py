@@ -121,6 +121,8 @@ def _load_csv(csv_path: str) -> None:
             cur.execute(
                 "CREATE TEMP TABLE tmp_orders (LIKE public.orders INCLUDING DEFAULTS) ON COMMIT DROP;"
             )
+            # Порядок полей CSV должен совпадать со списком COPY.
+            # HEADER пропускает заголовок, а не сопоставляет имена колонок.
             cur.copy_expert(
                 "COPY tmp_orders (order_id, order_ts, customer_id, amount) FROM STDIN WITH CSV HEADER",
                 f,

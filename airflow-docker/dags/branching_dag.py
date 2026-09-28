@@ -16,7 +16,9 @@ def choose_format():
     file_format = Variable.get("branch_format", default_var="csv")
     branches = {"csv": "process_csv_branch", "json": "process_json_branch"}
     if file_format not in branches:
-        raise ValueError(f"branch_format должен быть csv или json, получено: {file_format}")
+        raise ValueError(
+            f"branch_format должен быть csv или json, получено: {file_format}"
+        )
     logging.info("Выбран формат: %s", file_format)
     return branches[file_format]
 

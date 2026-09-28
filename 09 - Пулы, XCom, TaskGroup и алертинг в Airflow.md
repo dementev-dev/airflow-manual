@@ -236,7 +236,13 @@ def notify_failure(context):
 
 Укажите `on_failure_callback=notify_failure` в рабочем операторе. Функция вызывается после окончательного отказа, когда повторы исчерпаны. Для сообщения о предстоящем повторе существует `on_retry_callback`. Например, при `retries=2` задача может выполниться три раза: исходная попытка и два повтора.
 
-Callback запускается при реальном выполнении задачи. Ручная смена статуса в UI его не проверяет. Смотрите лог самой задачи и логи scheduler; ошибки callback ищите в логах scheduler. [Документация Airflow 2.9.2 о callbacks](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/logging-monitoring/callbacks.html).
+Callback запускается при реальном выполнении задачи. Ручная смена статуса в UI его не проверяет. В этом стенде сообщение callback оператора видно в Logs последней попытки задачи. Callback, назначенный самому DAG, пишет в файл логов планировщика. Например, для `error_handling_dag.py`:
+
+```bash
+docker compose exec airflow-scheduler cat /opt/airflow/logs/scheduler/latest/error_handling_dag.py.log
+```
+
+Этот файл может содержать несколько запусков: сверяйте `run_id` и время. Обычный `docker compose logs airflow-scheduler` не показывает все записи из него. Виды событий описаны в [документации Airflow 2.9.2 о callbacks](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/logging-monitoring/callbacks.html).
 
 ### Отправка почты по желанию
 
