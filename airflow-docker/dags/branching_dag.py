@@ -1,103 +1,70 @@
+"""Выбор ветки через Variable branch_format: csv или json.
+
+Обработка файлов имитируется. В основной практике изучаются граф и статусы.
 """
-DAG для демонстрации условного выполнения задач в Airflow
-Уровень: Продвинутый
-"""
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime
+
 from airflow import DAG
-from airflow.operators.python import PythonOperator, BranchPythonOperator
-from airflow.operators.dummy import DummyOperator
-import random
+from airflow.models import Variable
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import BranchPythonOperator, PythonOperator
 
-# Определение DAG
-default_args = {
-    'owner': 'student',
-    'depends_on_past': False,
-    'start_date': datetime(2023, 1, 1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5)
-}
 
-dag = DAG(
-    'branching_dag',
-    default_args=default_args,
-    description='DAG для изучения условного выполнения задач в Airflow',
-    schedule_interval=None,
-    catchup=False,
-    tags=['educational', 'branching', 'advanced']
-)
+def choose_format():
+    """Возвращает task_id выбранной ветки."""
+    file_format = Variable.get("branch_format", default_var="csv")
+    branches = {"csv": "process_csv_branch", "json": "process_json_branch"}
+    if file_format not in branches:
+        raise ValueError(f"branch_format должен быть csv или json, получено: {file_format}")
+    logging.info("Выбран формат: %s", file_format)
+    return branches[file_format]
 
-def check_data_quality():
-    """Проверка качества данных - случайным образом определяет, какие данные использовать"""
-    # В реальном сценарии здесь будет проверка качества данных
-    # Для учебных целей просто случайное решение
-    quality_score = random.random()  # случайное число от 0 до 1
-    
-    if quality_score > 0.5:
-        print(f"Качество данных хорошее (оценка: {quality_score:.2f}), используем CSV")
-        return 'process_csv_branch'
-    else:
-        print(f"Качество данных требует внимания (оценка: {quality_score:.2f}), используем JSON")
-        return 'process_json_branch'
 
 def process_csv_data():
-    """Обработка CSV данных"""
-    print("Обработка CSV файла...")
-    # Здесь будет логика обработки CSV файла
-    return "CSV данные обработаны"
+    """Имитирует обработку CSV."""
+    logging.info("Учебная CSV-ветка выполнена; файлы не читались")
+    return "csv"
+
 
 def process_json_data():
-    """Обработка JSON данных"""
-    print("Обработка JSON файла...")
-    # Здесь будет логика обработки JSON файла
-    return "JSON данные обработаны"
+    """Имитирует обработку JSON."""
+    logging.info("Учебная JSON-ветка выполнена; файлы не читались")
+    return "json"
 
-def merge_results():
-    """Объединение результатов из разных веток"""
-    print("Объединение результатов из разных веток...")
-    return "Результаты объединены"
 
-# Определение задач
-start_task = DummyOperator(
-    task_id='start_task',
-    dag=dag
-)
+def merge_results(ti):
+    """Читает результат выполненной ветки текущего запуска."""
+    results = ti.xcom_pull(task_ids=["process_csv_branch", "process_json_branch"])
+    selected = [value for value in results if value is not None]
+    logging.info("Результат выбранной ветки: %s", selected)
+    return selected
 
-check_quality_task = BranchPythonOperator(
-    task_id='check_data_quality',
-    python_callable=check_data_quality,
-    dag=dag
-)
 
-process_csv_task = PythonOperator(
-    task_id='process_csv_branch',
-    python_callable=process_csv_data,
-    dag=dag
-)
+with DAG(
+    "branching_dag",
+    start_date=datetime(2023, 1, 1),
+    schedule=None,
+    catchup=False,
+    default_args={"owner": "student", "retries": 0},
+    tags=["educational", "branching"],
+) as dag:
+    start_task = EmptyOperator(task_id="start_task")
+    choose_task = BranchPythonOperator(
+        task_id="choose_format", python_callable=choose_format,
+    )
+    process_csv_task = PythonOperator(
+        task_id="process_csv_branch", python_callable=process_csv_data,
+    )
+    process_json_task = PythonOperator(
+        task_id="process_json_branch", python_callable=process_json_data,
+    )
+    merge_task = PythonOperator(
+        task_id="merge_results",
+        python_callable=merge_results,
+        trigger_rule="none_failed_min_one_success",
+    )
+    end_task = EmptyOperator(task_id="end_task")
 
-process_json_task = PythonOperator(
-    task_id='process_json_branch',
-    python_callable=process_json_data,
-    dag=dag
-)
-
-merge_task = PythonOperator(
-    task_id='merge_results',
-    python_callable=merge_results,
-    trigger_rule='none_failed_or_skipped',  # Выполняется, когда одна из веток завершена
-    dag=dag
-)
-
-end_task = DummyOperator(
-    task_id='end_task',
-    dag=dag
-)
-
-# Установка зависимостей
-# BranchPythonOperator автоматически пропускает (skips) задачи в невыбранной ветке
-# Например, если check_data_quality возвращает 'process_csv_branch',
-# то задача process_json_branch будет пропущена (статус skipped)
-start_task >> check_quality_task
-check_quality_task >> [process_csv_task, process_json_task]
-[process_csv_task, process_json_task] >> merge_task >> end_task
+    start_task >> choose_task >> [process_csv_task, process_json_task]
+    [process_csv_task, process_json_task] >> merge_task >> end_task

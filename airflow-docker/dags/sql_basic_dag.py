@@ -4,7 +4,6 @@ DAG для демонстрации работы с SQL в Airflow
 """
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 # Определение DAG
@@ -76,11 +75,12 @@ query_data_task = PostgresOperator(
 )
 
 truncate_table_task = PostgresOperator(
-    task_id='drop_table',
+    task_id='truncate_table',
     postgres_conn_id='postgres_training',
     sql=truncate_table_sql,
     dag=dag
 )
 
 # Установка зависимостей
-create_table_task >> insert_data_task >> query_data_task >> truncate_table_task
+# Очистка перед вставкой: после запуска в таблице остаются три строки.
+create_table_task >> truncate_table_task >> insert_data_task >> query_data_task
