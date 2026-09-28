@@ -8,9 +8,9 @@
 
 В системах с высокой нагрузкой, где одновременно запускается множество задач и DAG-ов, может возникнуть чрезмерная нагрузка на исполнителей и серверную часть. Это может привести к ошибкам выполнения и даже к отказу системы, если не установить соответствующие ограничения.
 
-В Airflow для решения этой проблемы существует механизм управления ресурсами — **пулы задач** (pools). По умолчанию в Airflow настроен один пул задач — `default_pool` с 128 слотами, что означает возможность параллельного выполнения 128 задач одновременно. Пул `default_pool` нельзя удалить, но можно изменить его размер — увеличить или уменьшить количество слотов.
+В Airflow для решения этой проблемы существует механизм управления ресурсами — **пулы задач** (pools). По умолчанию в Airflow настроен один пул задач — `default_pool` с 128 слотами. При стандартном `pool_slots=1` это верхняя граница в 128 одновременно работающих задач; ограничения executor и DAG могут уменьшить ее. Пул `default_pool` нельзя удалить, но можно изменить его размер — увеличить или уменьшить количество слотов.
 
-Когда планировщик обнаруживает, что наступило время выполнения DAG, он запускает задачу согласно заданной последовательности. При этом задача занимает один слот в пуле и освобождает его после завершения.
+Когда планировщик обнаруживает, что наступило время выполнения DAG, он запускает задачу согласно заданной последовательности. По умолчанию задача занимает один слот в пуле и освобождает его после завершения.
 
 Создать новый пул задач и установить его размер можно через веб-интерфейс Airflow. Рассмотрим пример пула `data_processing_pool` для тяжёлых задач:
 
@@ -29,7 +29,7 @@
 - Организовать запуск процессов в системе
 - Предотвратить перегрузку системы при выполнении большого количества ресурсоемких задач
 
-Вы можете задать "вес" задачи через параметр `pool_slots`, чтобы оптимизировать распределение нагрузки. Если общее количество задач превышает доступные слоты, планировщик поставит задачу в очередь и запустит ее, как только появятся свободные ресурсы.
+Вы можете задать "вес" задачи через параметр `pool_slots`, чтобы оптимизировать распределение нагрузки. Планировщик учитывает сумму занятых слотов. Например, в пуле из двух слотов задачи с `pool_slots=2` и `pool_slots=1` не смогут работать одновременно: одна ждет завершения другой.
 
 Пример настройки веса задач:
 
@@ -58,7 +58,7 @@ BashOperator(
 )
 ```
 
-Более подробную информацию о механизме пулов можно найти в [официальной документации](https://airflow.apache.org/docs/apache-airflow/stable/concepts/pools.html#pools).
+Более подробную информацию о механизме пулов можно найти в [официальной документации](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/pools.html).
 
 ## Обмен данными между задачами: XCom и контекст выполнения
 
@@ -220,100 +220,64 @@ TaskGroup — это удобный способ логической групп
 
 ## Система оповещений (алертинг)
 
-Алертинг — один из ключевых компонентов системы оркестрации, так как важно своевременно получать уведомления об ошибках для их оперативного анализа и решения.
-
-В Airflow есть встроенная поддержка отправки уведомлений на электронную почту (при условии, что в конфигурации настроен SMTP-сервер). При создании DAG указываются email-адреса, на которые будут отправляться сообщения. С помощью параметров можно настроить различные сценарии оповещений.
-
-Давайте модифицируем наш первый DAG так, чтобы получать уведомления на почту при возникновении ошибок. При этом настроим перезапуск задач в случае неудачи (например, 2 попытки), но без уведомлений о самих перезапусках:
-
-В приведенном примере создан DAG с идентификатором 'customer_analysis_pipeline', который настроен на отправку уведомлений по электронной почте только при ошибках (email_on_failure=True), но не при повторных попытках (email_on_retry=False). Также установлено 2 попытки повторного запуска задач при ошибках с задержкой 2 минуты между попытками.
+Для первого опыта достаточно callback с записью в лог. Он получает контекст задачи и помогает связать сообщение с конкретным запуском:
 
 ```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.python import PythonOperator
-from airflow.operators.bash import BashOperator
-from sqlalchemy import create_engine
+import logging
 
-# основные параметры DAG
-args = {
-    'owner': 'data_engineering_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-    'email': ["data-team@example.com"],
-    'email_on_failure': True,
-    'email_on_retry': False,
-}
 
-dag = DAG(
-    dag_id='customer_analysis_pipeline',
-    schedule_interval=None,
-    default_args=args,
-)
+def notify_failure(context):
+    ti = context["ti"]
+    logging.error(
+        "Ошибка: dag=%s task=%s run=%s причина=%s",
+        ti.dag_id, ti.task_id, context["run_id"], context["exception"],
+    )
 ```
 
-Теперь вы будете получать email-уведомления при ошибках выполнения.
+Укажите `on_failure_callback=notify_failure` в рабочем операторе. Функция вызывается после окончательного отказа, когда повторы исчерпаны. Для сообщения о предстоящем повторе существует `on_retry_callback`. Например, при `retries=2` задача может выполниться три раза: исходная попытка и два повтора.
 
-Пример функции для отправки уведомлений с использованием параметров из контекста:
+Callback запускается при реальном выполнении задачи. Ручная смена статуса в UI его не проверяет. Смотрите лог самой задачи и логи scheduler; ошибки callback ищите в логах scheduler. [Документация Airflow 2.9.2 о callbacks](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/logging-monitoring/callbacks.html).
+
+### Отправка почты по желанию
+
+В учебном стенде SMTP не настроен. Для отправки нужен SMTP-сервер и адрес получателя, которому можно отправлять тестовые сообщения. Укажите настройки в общем окружении сервисов Airflow: `AIRFLOW__SMTP__SMTP_HOST`, `AIRFLOW__SMTP__SMTP_PORT`, `AIRFLOW__SMTP__SMTP_MAIL_FROM`, параметры TLS/SSL и учетные данные вашего сервера. Секреты храните локально, вне Git. После изменения окружения пересоздайте сервисы командой `docker compose up -d`. Полный список параметров находится в [конфигурации Airflow 2.9.2](https://airflow.apache.org/docs/apache-airflow/2.9.2/configurations-ref.html#smtp).
+
+После настройки замените запись в лог отправкой сообщения:
 
 ```python
-from datetime import datetime, timedelta, timezone
-import dateutil
+from html import escape
+
 from airflow.utils.email import send_email_smtp
-from airflow.operators.python import get_current_context
 
-MAIL_LIST = [
-    "email_1@gmail.ru",
-    "email_2@gmail.ru"
-]
+MAIL_TO = ["student@example.com"]  # Замените своим тестовым адресом.
 
-def notify_email(calculation_dt: str, dagrun_begin_time: str):
-    # dag_run date is utc timezone, so add `timezone.utc` to calculation_end to combat 3 hour diff.
-    context = get_current_context()
-    calculation_start = dateutil.parser.isoparse(dagrun_begin_time.replace('Z', '+00:00'))
-    calculation_end = datetime.now(timezone.utc)
-    duration = str(timedelta(seconds=(calculation_end - calculation_start).seconds))
-    
-    title = f"Ежедневные расчёты завершились успешно (dag: {context['task_instance'].dag_id})."
-    
-    body = f"""
-        Привет, <br>
-        Я закончил работу над расчётом за "{calculation_dt}". Это заняло {duration} часов/минут/секунд.<br>
-        Логи и запуски тоже можно посмотреть <a href="http://airflow-monitoring.example.com/tree?dag_id=daily_guests_features">тут</a>.
-        <br>
-        
-        <br>
-        <br>
-        Навеки твой,<br>
-        Airflow бот <br>
-        """
-    
-    send_email_smtp(";".join(MAIL_LIST), title, body)
+
+def notify_failure(context):
+    ti = context["ti"]
+    send_email_smtp(
+        to=MAIL_TO,
+        subject=f"Ошибка {ti.dag_id}: {ti.task_id}",
+        html_content=(
+            f"<p>Запуск: {escape(context['run_id'])}</p>"
+            f"<p>Причина: {escape(str(context['exception']))}</p>"
+            f'<p><a href="{escape(ti.log_url, quote=True)}">Лог задачи</a></p>'
+        ),
+    )
+
+
+def notify_success(context):
+    send_email_smtp(
+        to=MAIL_TO,
+        subject=f"DAG {context['dag'].dag_id} завершен успешно",
+        html_content=f"<p>Запуск: {escape(context['run_id'])}</p>",
+    )
 ```
 
-Такую функцию можно разместить в отдельном файле (например, `utils.py`), импортировать как модуль в нужных DAG и вызывать отдельной задачей:
+Для примера с ошибками задайте `on_failure_callback=notify_failure` у двух рабочих задач, а `on_success_callback=notify_success` у самого `DAG(...)`. Если упадут обе задачи, придут два сообщения об отказе. Сообщение об успехе отправится только после успешного DAG Run. Не включайте одновременно `email_on_failure=True`, если не хотите получать еще и встроенное письмо о той же ошибке.
 
-```python
-from airflow.operators.python import PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
-from utils import notify_email
+Не добавляйте ради уведомления единственную завершающую задачу с `trigger_rule="all_done"`: если она успешна, Airflow может признать весь запуск успешным, несмотря на отказ внутри графа. Callback не меняет граф и итог обработки. Ошибка отправки означает проблему уведомления; она не превращает успешно обработанные данные в неуспешные и не скрывает исходный отказ. Подробности определения результата - в [описании DAG Run](https://airflow.apache.org/docs/apache-airflow/2.9.2/core-concepts/dag-run.html#dag-run-status).
 
-LOCAL_CALCULATION_DT = '{{ dag.timezone.convert(execution_date).strftime("%Y-%m-%d") }}'
-DAG_RUN_BEGIN_TIME = "{{ dag_run.start_date }}"
-
-email_notification_task = PythonOperator(
-    task_id="send_email_notification",
-    python_callable=notify_email,
-    dag=dag,
-    trigger_rule=TriggerRule.ALL_DONE,
-    op_args=[LOCAL_CALCULATION_DT, DAG_RUN_BEGIN_TIME],
-)
-
-... >> email_notification_task
-```
+Проверка: сначала воспроизведите окончательный отказ, затем успешный запуск. Сверьте текст каждого письма с состоянием соответствующего DAG Run. Упражнения находятся в [блоке ошибок](airflow-docker/educational-tasks.md#errors) и [задании на почту](airflow-docker/educational-tasks.md#resources).
 
 ## Практическое применение: улучшенный DAG
 
