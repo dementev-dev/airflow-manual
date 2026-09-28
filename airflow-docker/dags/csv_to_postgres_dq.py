@@ -2,7 +2,7 @@
 DAG для проверки качества данных (Data Quality) после загрузки в PostgreSQL
 Уровень: Средний
 
-Этот DAG запускается после csv_to_postgres и проверяет таблицу public.orders:
+Запустите этот DAG вручную после csv_to_postgres. Он проверяет public.orders:
 1. Существование таблицы
 2. Соответствие схемы (колонки и типы данных)
 3. Наличие данных (таблица не пуста)
@@ -14,12 +14,11 @@ DAG для проверки качества данных (Data Quality) пос�
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-
-from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
+from datetime import datetime
 
 from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 POSTGRES_CONN_ID = "postgres_training"
 
@@ -106,13 +105,20 @@ def _check_no_duplicates():
         conn.close()
 
 
-def _log_dq_summary():
-    """Логирует итоговую сводку по качеству данных."""
-    logging.info("Все проверки качества данных пройдены успешно!")
-    logging.info("Качество данных в таблице orders соответствует требованиям.")
+def _log_dq_summary(dag_run, ti):
+    """Проверяет итог, в том числе при учебном переходе на all_done."""
+    states = {
+        task.task_id: task.state
+        for task in dag_run.get_task_instances()
+        if task.task_id != ti.task_id
+    }
+    logging.info("Результаты проверок: %s", states)
+    if any(state != "success" for state in states.values()):
+        raise ValueError("Не все проверки качества данных прошли успешно")
+    logging.info("Все проверки качества данных пройдены")
 
 
-default_args = {"owner": "airflow", "retries": 1, "retry_delay": timedelta(seconds=30)}
+default_args = {"owner": "student", "retries": 0}
 
 with DAG(
     dag_id="csv_to_postgres_dq",

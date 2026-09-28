@@ -2,15 +2,15 @@
 
 В этом материале мы познакомимся с управлением ресурсами через пулы задач, обменом данными между задачами через XCom, группировкой задач с помощью TaskGroup и настройкой системы оповещений (алертинга) в Airflow.
 
-Начнем с улучшения нашего базового пайплайна — проведем рефакторинг кода для лучшей читаемости и поддержки.
+Опыты с этими возможностями собраны в [блоке 8 практики](educational-tasks.md#resources); callback и ошибки разобраны в [блоке 7](educational-tasks.md#errors).
 
 ## Управление ресурсами с помощью пулов задач
 
 В системах с высокой нагрузкой, где одновременно запускается множество задач и DAG-ов, может возникнуть чрезмерная нагрузка на исполнителей и серверную часть. Это может привести к ошибкам выполнения и даже к отказу системы, если не установить соответствующие ограничения.
 
-В Airflow для решения этой проблемы существует механизм управления ресурсами — **пулы задач** (pools). По умолчанию в Airflow настроен один пул задач — `default_pool` с 128 слотами, что означает возможность параллельного выполнения 128 задач одновременно. Пул `default_pool` нельзя удалить, но можно изменить его размер — увеличить или уменьшить количество слотов.
+В Airflow для решения этой проблемы существует механизм управления ресурсами — **пулы задач** (pools). По умолчанию в Airflow настроен один пул задач — `default_pool` с 128 слотами. При стандартном `pool_slots=1` это верхняя граница в 128 одновременно работающих задач; ограничения executor и DAG могут уменьшить ее. Пул `default_pool` нельзя удалить, но можно изменить его размер — увеличить или уменьшить количество слотов.
 
-Когда планировщик обнаруживает, что наступило время выполнения DAG, он запускает задачу согласно заданной последовательности. При этом задача занимает один слот в пуле и освобождает его после завершения.
+Когда планировщик обнаруживает, что наступило время выполнения DAG, он запускает задачу согласно заданной последовательности. По умолчанию задача занимает один слот в пуле и освобождает его после завершения.
 
 Создать новый пул задач и установить его размер можно через веб-интерфейс Airflow. Рассмотрим пример пула `data_processing_pool` для тяжёлых задач:
 
@@ -29,7 +29,7 @@
 - Организовать запуск процессов в системе
 - Предотвратить перегрузку системы при выполнении большого количества ресурсоемких задач
 
-Вы можете задать "вес" задачи через параметр `pool_slots`, чтобы оптимизировать распределение нагрузки. Если общее количество задач превышает доступные слоты, планировщик поставит задачу в очередь и запустит ее, как только появятся свободные ресурсы.
+Вы можете задать "вес" задачи через параметр `pool_slots`, чтобы оптимизировать распределение нагрузки. Планировщик учитывает сумму занятых слотов. Например, в пуле из двух слотов задачи с `pool_slots=2` и `pool_slots=1` не смогут работать одновременно: одна ждет завершения другой.
 
 Пример настройки веса задач:
 
@@ -58,7 +58,7 @@ BashOperator(
 )
 ```
 
-Более подробную информацию о механизме пулов можно найти в [официальной документации](https://airflow.apache.org/docs/apache-airflow/stable/concepts/pools.html#pools).
+Более подробную информацию о механизме пулов можно найти в [официальной документации](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/pools.html).
 
 ## Обмен данными между задачами: XCom и контекст выполнения
 
@@ -151,338 +151,136 @@ XCom упрощает взаимодействие между задачами �
 
 ## Группировка задач с помощью TaskGroup
 
-Для удобства визуализации задачи можно группировать в веб-интерфейсе Airflow (начиная с версии 2.0). Повторяющиеся или логически связанные задачи можно объединить в группы:
+TaskGroup объединяет задачи в сворачиваемую группу на графе. Зависимости и состояния остаются у отдельных задач. Группировку задают в Python-коде; UI позволяет раскрыть ее и посмотреть содержимое.
 
-В этом примере задачи сгруппированы в три логические группы: 'data_extraction', 'data_transformation' и 'data_loading'. Каждая группа содержит несколько задач, которые выполняются последовательно внутри группы. Затем группы связаны между собой, чтобы показать общий порядок выполнения этапов обработки данных.
+В примере три группы. Внутри каждой задачи идут последовательно. Группы извлечения и преобразования независимы, а загрузка ждет завершения обеих. `EmptyOperator` ничего не обрабатывает: здесь мы смотрим только на устройство графа.
 
 ```python
-with TaskGroup("data_extraction") as extraction_group:
-    extract_1 = DummyOperator(task_id="extract_source_1")
-    extract_2 = DummyOperator(task_id="extract_source_2")
-    extract_3 = DummyOperator(task_id="extract_source_3")
-    extract_1 >> extract_2 >> extract_3
+from datetime import datetime
 
-with TaskGroup("data_transformation") as transformation_group:
-    transform_1 = DummyOperator(task_id="transform_step_1")
-    transform_2 = DummyOperator(task_id="transform_step_2")
-    transform_1 >> transform_2
+from airflow import DAG
+from airflow.operators.empty import EmptyOperator
+from airflow.utils.task_group import TaskGroup
 
-with TaskGroup("data_loading") as loading_group:
-    load_1 = DummyOperator(task_id="load_to_target_1")
-    load_2 = DummyOperator(task_id="load_to_target_2")
-    load_1 >> load_2
+with DAG(
+    dag_id="task_group_example",
+    start_date=datetime(2023, 1, 1),
+    schedule=None,
+    catchup=False,
+) as dag:
+    with TaskGroup("data_extraction") as extraction_group:
+        extract_1 = EmptyOperator(task_id="extract_source_1")
+        extract_2 = EmptyOperator(task_id="extract_source_2")
+        extract_3 = EmptyOperator(task_id="extract_source_3")
+        extract_1 >> extract_2 >> extract_3
 
-[extraction_group, transformation_group] >> loading_group
+    with TaskGroup("data_transformation") as transformation_group:
+        transform_1 = EmptyOperator(task_id="transform_step_1")
+        transform_2 = EmptyOperator(task_id="transform_step_2")
+        transform_1 >> transform_2
+
+    with TaskGroup("data_loading") as loading_group:
+        load_1 = EmptyOperator(task_id="load_to_target_1")
+        load_2 = EmptyOperator(task_id="load_to_target_2")
+        load_1 >> load_2
+
+    [extraction_group, transformation_group] >> loading_group
 ```
 
-Обратите внимание: при использовании TaskGroup последовательность задач указывается внутри группы после объявления всех задач, а в конце DAG описывается последовательность выполнения самих групп.
+Здесь TaskGroup создается внутри `with DAG(...)`, поэтому группа и ее задачи получают один DAG. При отдельном объявлении `dag = DAG(...)` группу нужно привязать явно: `TaskGroup("data_extraction", dag=dag)`.
 
-Ниже приведена упрощённая схема зависимостей между тремя группами задач:
+Схема повторяет зависимости из кода:
 
 ```mermaid
 flowchart LR
-
-  %% group1
-  subgraph G1["group1"]
-    g1_t1["task1"]
-    g1_t2["task2"]
-    g1_t3["task3"]
-
-    g1_t1 --> g1_t2
-    g1_t1 --> g1_t3
+  subgraph extraction["data_extraction"]
+    e1["extract_source_1"] --> e2["extract_source_2"] --> e3["extract_source_3"]
   end
-
-  %% group2
-  subgraph G2["group2"]
-    g2_t1["task1"]
-    g2_t2["task2"]
-
-    g2_t1 --> g2_t2
+  subgraph transformation["data_transformation"]
+    t1["transform_step_1"] --> t2["transform_step_2"]
   end
-
-  %% group3
-  subgraph G3["group3"]
-    g3_t1["task1"]
-    g3_t2["task2"]
-
-    g3_t1 --> g3_t2
+  subgraph loading["data_loading"]
+    l1["load_to_target_1"] --> l2["load_to_target_2"]
   end
-
-  %% зависимости между группами
-  g1_t2 --> g3_t1
-  g1_t3 --> g3_t1
-  g2_t2 --> g3_t1
+  e3 --> l1
+  t2 --> l1
 ```
 
-Визуально в интерфейсе Airflow группы задач отображаются как один узел с небольшим индикатором. Клик по нему разворачивает или сворачивает вложенные задачи, что значительно улучшает восприятие DAG с большим количеством задач и связей, особенно когда в них десятки и сотни задач.
-
-TaskGroup — это удобный способ логической группировки задач, который помогает упростить код и представить сложные пайплайны более компактно.
+Для запуска сохраните пример в `airflow-docker/dags/task_group_example_dag.py`. После ручного запуска все семь задач должны завершиться успешно. Нажмите название группы со стрелкой, чтобы раскрыть ее. Полный идентификатор первой задачи - `data_extraction.extract_source_1`: имя группы становится префиксом `task_id`. Такой идентификатор нужен при обращении к задаче через XCom.
 
 ## Система оповещений (алертинг)
 
-Алертинг — один из ключевых компонентов системы оркестрации, так как важно своевременно получать уведомления об ошибках для их оперативного анализа и решения.
-
-В Airflow есть встроенная поддержка отправки уведомлений на электронную почту (при условии, что в конфигурации настроен SMTP-сервер). При создании DAG указываются email-адреса, на которые будут отправляться сообщения. С помощью параметров можно настроить различные сценарии оповещений.
-
-Давайте модифицируем наш первый DAG так, чтобы получать уведомления на почту при возникновении ошибок. При этом настроим перезапуск задач в случае неудачи (например, 2 попытки), но без уведомлений о самих перезапусках:
-
-В приведенном примере создан DAG с идентификатором 'customer_analysis_pipeline', который настроен на отправку уведомлений по электронной почте только при ошибках (email_on_failure=True), но не при повторных попытках (email_on_retry=False). Также установлено 2 попытки повторного запуска задач при ошибках с задержкой 2 минуты между попытками.
+Для первого опыта достаточно callback с записью в лог. Он получает контекст задачи и помогает связать сообщение с конкретным запуском:
 
 ```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.python import PythonOperator
-from airflow.operators.bash import BashOperator
-from sqlalchemy import create_engine
+import logging
 
-# основные параметры DAG
-args = {
-    'owner': 'data_engineering_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-    'email': ["data-team@example.com"],
-    'email_on_failure': True,
-    'email_on_retry': False,
-}
 
-dag = DAG(
-    dag_id='customer_analysis_pipeline',
-    schedule_interval=None,
-    default_args=args,
-)
+def notify_failure(context):
+    ti = context["ti"]
+    logging.error(
+        "Ошибка: dag=%s task=%s run=%s причина=%s",
+        ti.dag_id, ti.task_id, context["run_id"], context["exception"],
+    )
 ```
 
-Теперь вы будете получать email-уведомления при ошибках выполнения.
+Укажите `on_failure_callback=notify_failure` в рабочем операторе. Функция вызывается после окончательного отказа, когда повторы исчерпаны. Для сообщения о предстоящем повторе существует `on_retry_callback`. Например, при `retries=2` задача может выполниться три раза: исходная попытка и два повтора.
 
-Пример функции для отправки уведомлений с использованием параметров из контекста:
+Callback запускается при реальном выполнении задачи. Ручная смена статуса в UI его не проверяет. В этом стенде сообщение callback оператора видно в Logs последней попытки задачи. Callback, назначенный самому DAG, пишет в файл логов планировщика. Например, для `error_handling_dag.py`:
+
+```bash
+docker compose exec airflow-scheduler cat /opt/airflow/logs/scheduler/latest/error_handling_dag.py.log
+```
+
+Этот файл может содержать несколько запусков: сверяйте `run_id` и время. Обычный `docker compose logs airflow-scheduler` не показывает все записи из него. Виды событий описаны в [документации Airflow 2.9.2 о callbacks](https://airflow.apache.org/docs/apache-airflow/2.9.2/administration-and-deployment/logging-monitoring/callbacks.html).
+
+### Отправка почты по желанию
+
+В учебном стенде SMTP не настроен. Для отправки нужен SMTP-сервер и адрес получателя, которому можно отправлять тестовые сообщения. Укажите настройки в общем окружении сервисов Airflow: `AIRFLOW__SMTP__SMTP_HOST`, `AIRFLOW__SMTP__SMTP_PORT`, `AIRFLOW__SMTP__SMTP_MAIL_FROM`, параметры TLS/SSL и учетные данные вашего сервера. Секреты храните локально, вне Git. После изменения окружения пересоздайте сервисы командой `docker compose up -d`. Полный список параметров находится в [конфигурации Airflow 2.9.2](https://airflow.apache.org/docs/apache-airflow/2.9.2/configurations-ref.html#smtp).
+
+После настройки замените запись в лог отправкой сообщения:
 
 ```python
-from datetime import datetime, timedelta, timezone
-import dateutil
+from html import escape
+
 from airflow.utils.email import send_email_smtp
-from airflow.operators.python import get_current_context
 
-MAIL_LIST = [
-    "email_1@gmail.ru",
-    "email_2@gmail.ru"
-]
+MAIL_TO = ["student@example.com"]  # Замените своим тестовым адресом.
 
-def notify_email(calculation_dt: str, dagrun_begin_time: str):
-    # dag_run date is utc timezone, so add `timezone.utc` to calculation_end to combat 3 hour diff.
-    context = get_current_context()
-    calculation_start = dateutil.parser.isoparse(dagrun_begin_time.replace('Z', '+00:00'))
-    calculation_end = datetime.now(timezone.utc)
-    duration = str(timedelta(seconds=(calculation_end - calculation_start).seconds))
-    
-    title = f"Ежедневные расчёты завершились успешно (dag: {context['task_instance'].dag_id})."
-    
-    body = f"""
-        Привет, <br>
-        Я закончил работу над расчётом за "{calculation_dt}". Это заняло {duration} часов/минут/секунд.<br>
-        Логи и запуски тоже можно посмотреть <a href="http://airflow-monitoring.example.com/tree?dag_id=daily_guests_features">тут</a>.
-        <br>
-        
-        <br>
-        <br>
-        Навеки твой,<br>
-        Airflow бот <br>
-        """
-    
-    send_email_smtp(";".join(MAIL_LIST), title, body)
-```
 
-Такую функцию можно разместить в отдельном файле (например, `utils.py`), импортировать как модуль в нужных DAG и вызывать отдельной задачей:
-
-```python
-from airflow.operators.python import PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
-from utils import notify_email
-
-LOCAL_CALCULATION_DT = '{{ dag.timezone.convert(execution_date).strftime("%Y-%m-%d") }}'
-DAG_RUN_BEGIN_TIME = "{{ dag_run.start_date }}"
-
-email_notification_task = PythonOperator(
-    task_id="send_email_notification",
-    python_callable=notify_email,
-    dag=dag,
-    trigger_rule=TriggerRule.ALL_DONE,
-    op_args=[LOCAL_CALCULATION_DT, DAG_RUN_BEGIN_TIME],
-)
-
-... >> email_notification_task
-```
-
-## Практическое применение: улучшенный DAG
-
-Теперь применим изученные концепции для усовершенствования нашего DAG. Добавим переменные и разобьем задачи на логические группы.
-
-Сначала создадим переменную `DATABASE_URL` со строкой подключения к базе данных через веб-интерфейс Airflow и импортируем ее в коде DAG:
-
-В этом примере используется переменная 'database_connection_string', предварительно созданная в интерфейсе Airflow, для хранения строки подключения к базе данных. Это позволяет избежать жесткого кодирования конфиденциальной информации в коде DAG и упрощает настройку подключения для разных окружений.
-
-```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.utils.task_group import TaskGroup
-from airflow.models import Variable
-from sqlalchemy import create_engine
-
-DATABASE_URL = Variable.get('database_connection_string')
-
-args = {
-    'owner': 'analytics_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-}
-
-# функции для обработки данных
-def get_file_path(file_name):
-    return os.path.join(os.path.expanduser('~/data'), file_name)
-
-def load_customer_data():
-    file_path = get_file_path('customer_data.csv')
-    df = pd.read_csv(file_path)
-    engine = create_engine(DATABASE_URL)
-    df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
-
-def aggregate_customer_data():
-    engine = create_engine(DATABASE_URL)
-    customer_df = pd.read_sql('select * from staging.customers', con=engine)
-    
-    df = customer_df.groupby(['region', 'category']).agg(
-            total_orders=('orders', 'sum'),
-            avg_amount=('amount', 'mean')
-        ).reset_index()
-    
-    df.to_sql('customer_summary', engine, index=False, if_exists='replace', schema='analytics')
-
-dag = DAG(
-    dag_id='customer_pipeline_enhanced',
-    schedule_interval=None,
-    default_args=args,
-)
-```
-
-Теперь разобьем задачи на логические группы и добавим Jinja-шаблоны для доступа к контексту выполнения:
-
-В этом примере создается начальная задача 'pipeline_start', которая использует Jinja-шаблоны для вывода информации о запуске DAG, включая идентификатор запуска (run_id) и информацию о DAG Run. Затем задачи группируются в логическую группу 'data_processing_stage', что улучшает структуру и читаемость DAG.
-
-```python
-# Начальная задача с информацией о запуске
-start_task = BashOperator(
-    task_id='pipeline_start',
-    bash_command='echo "Pipeline started! Run ID: {{ run_id }} | DAG Run: {{ dag_run }}"',
-    dag=dag,
-)
-
-# Группа задач по предварительной обработке данных
-with TaskGroup(group_id="data_processing_stage") as data_processing:
-    # Загрузка данных
-    load_customer_dataset = PythonOperator(
-        task_id='load_customer_data',
-        python_callable=load_customer_data,
-        dag=dag,
+def notify_failure(context):
+    ti = context["ti"]
+    send_email_smtp(
+        to=MAIL_TO,
+        subject=f"Ошибка {ti.dag_id}: {ti.task_id}",
+        html_content=(
+            f"<p>Запуск: {escape(context['run_id'])}</p>"
+            f"<p>Причина: {escape(str(context['exception']))}</p>"
+            f'<p><a href="{escape(ti.log_url, quote=True)}">Лог задачи</a></p>'
+        ),
     )
-    # Агрегация и запись данных
-    aggregate_customer_dataset = PythonOperator(
-        task_id='aggregate_customer_data',
-        python_callable=aggregate_customer_data,
-        dag=dag,
-    )
-    load_customer_dataset >> aggregate_customer_dataset
 
-# Установка последовательности выполнения
-start_task >> data_processing
+
+def notify_success(context):
+    send_email_smtp(
+        to=MAIL_TO,
+        subject=f"DAG {context['dag'].dag_id} завершен успешно",
+        html_content=f"<p>Запуск: {escape(context['run_id'])}</p>",
+    )
 ```
 
-Поскольку последовательность задач внутри групп указывается при их создании, в конце необходимо определить порядок выполнения самих групп, чтобы планировщик понимал общую логику выполнения.
+Для примера с ошибками задайте `on_failure_callback=notify_failure` у двух рабочих задач, а `on_success_callback=notify_success` у самого `DAG(...)`. Если упадут обе задачи, придут два сообщения об отказе. Сообщение об успехе отправится только после успешного DAG Run. Не включайте одновременно `email_on_failure=True`, если не хотите получать еще и встроенное письмо о той же ошибке.
 
-Итоговый DAG будет выглядеть следующим образом:
+Не добавляйте ради уведомления единственную завершающую задачу с `trigger_rule="all_done"`: если она успешна, Airflow может признать весь запуск успешным, несмотря на отказ внутри графа. Callback не меняет граф и итог обработки. Ошибка отправки означает проблему уведомления; она не превращает успешно обработанные данные в неуспешные и не скрывает исходный отказ. Подробности определения результата - в [описании DAG Run](https://airflow.apache.org/docs/apache-airflow/2.9.2/core-concepts/dag-run.html#dag-run-status).
 
-```python
-import os
-import datetime as dt
-import pandas as pd
-from airflow.models import DAG
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.utils.task_group import TaskGroup
-from airflow.models import Variable
-from sqlalchemy import create_engine
+Проверка: сначала воспроизведите окончательный отказ, затем успешный запуск. Сверьте текст каждого письма с состоянием соответствующего DAG Run. Упражнения находятся в [блоке ошибок](educational-tasks.md#errors) и [задании на почту](educational-tasks.md#resources).
 
-DATABASE_URL = Variable.get('database_connection_string')
+## Практика на учебном стенде
 
-args = {
-    'owner': 'analytics_team',
-    'start_date': dt.datetime(2021, 6, 15),
-    'retries': 2,
-    'retry_delay': dt.timedelta(minutes=2),
-}
+Откройте [resource_management_dag.py](airflow-docker/dags/resource_management_dag.py). Он имитирует чтение двух источников и передает небольшие результаты через XCom. Для запуска нужен пул `training_pool` с двумя слотами; создайте его в Admin > Pools.
 
-def get_file_path(file_name):
-    return os.path.join(os.path.expanduser('~/data'), file_name)
+В исходном DAG задачи `read_customers` и `read_orders` не зависят друг от друга, но занимают два и один слот соответственно. Поэтому они выполняются последовательно. `calculate_metrics` получает их результаты через `xcom_pull`, а `log_metrics` пишет в лог словарь `customers=20`, `orders=30`.
 
-def load_customer_data():
-    file_path = get_file_path('customer_data.csv')
-    df = pd.read_csv(file_path)
-    engine = create_engine(DATABASE_URL)
-    df.to_sql('customers', engine, index=False, if_exists='replace', schema='staging')
+В [заданиях 8.1-8.3](educational-tasks.md#resources) вы измените вес задачи в пуле, добавите метрику и объедините задачи чтения в TaskGroup. Там описаны изменения, ожидаемые результаты и места проверки. Файлы CSV и подключение к БД для этого примера не нужны: чтение источников имитируется.
 
-def aggregate_customer_data():
-    engine = create_engine(DATABASE_URL)
-    customer_df = pd.read_sql('select * from staging.customers', con=engine)
-    
-    df = customer_df.groupby(['region', 'category']).agg(
-            total_orders=('orders', 'sum'),
-            avg_amount=('amount', 'mean')
-        ).reset_index()
-    
-    df.to_sql('customer_summary', engine, index=False, if_exists='replace', schema='analytics')
-
-dag = DAG(
-    dag_id='customer_pipeline_enhanced',
-    schedule_interval=None,
-    default_args=args,
-)
-
-# Начальная задача
-start_task = BashOperator(
-    task_id='pipeline_start',
-    bash_command='echo "Pipeline started! Run ID: {{ run_id }} | DAG Run: {{ dag_run }}"',
-    dag=dag,
-)
-
-# Группа предварительной обработки
-with TaskGroup(group_id="data_processing_stage") as data_processing:
-    load_customer_dataset = PythonOperator(
-        task_id='load_customer_data',
-        python_callable=load_customer_data,
-        dag=dag,
-    )
-    aggregate_customer_dataset = PythonOperator(
-        task_id='aggregate_customer_data',
-        python_callable=aggregate_customer_data,
-        dag=dag,
-    )
-    load_customer_dataset >> aggregate_customer_dataset
-
-start_task >> data_processing
-```
-
-В этом материале мы рассмотрели расширенные возможности Airflow, которые помогут улучшить работу ваших пайплайнов:
-- Управление ресурсами с помощью пулов задач
-- Обмен данными между задачами через XCom
-- Логическая группировка задач с TaskGroup
-- Настройка системы оповещений
-
-Помните: не стоит использовать все доступные функции сразу. Выбирайте инструменты последовательно и находите оптимальный набор возможностей под конкретную задачу.
+Для опытов с callback используйте [error_handling_dag.py](airflow-docker/dags/error_handling_dag.py) и [блок 7](educational-tasks.md#errors). Отправка настоящей почты остается заданием по желанию.

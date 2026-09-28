@@ -6,7 +6,7 @@ DAG для демонстрации ETL процессов в Airflow
 1. Создание тестовых данных (клиенты + заказы) в CSV
 2. Параллельное извлечение (Extract) клиентов и заказов
 3. Трансформация (Transform) — объединение таблиц, вычисляемые поля
-4. Загрузка (Load) — подготовка SQL для вставки в БД
+4. Имитация загрузки: число подготовленных строк и пример DDL в логах
 5. Генерация текстового отчёта со статистикой
 
 Результат: файлы в /opt/airflow/data/output/ (extracted_*, transformed_data.csv, report.txt).
@@ -14,7 +14,6 @@ DAG для демонстрации ETL процессов в Airflow
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 # Определение DAG
 default_args = {
@@ -85,8 +84,8 @@ def extract_orders():
 def transform_data():
     """Преобразование данных - объединение клиентов и заказов"""
     import pandas as pd
-    customers_df = pd.read_csv('/opt/airflow/data/input/customers.csv')
-    orders_df = pd.read_csv('/opt/airflow/data/input/orders.csv')
+    customers_df = pd.read_csv('/opt/airflow/data/output/extracted_customers.csv')
+    orders_df = pd.read_csv('/opt/airflow/data/output/extracted_orders.csv')
     
     # Объединяем данные
     merged_df = pd.merge(orders_df, customers_df, on='customer_id', how='left')
@@ -101,14 +100,14 @@ def transform_data():
     
     return f"Преобразованы {len(merged_df)} записей"
 
-def load_to_database():
+def simulate_load():
     """Загрузка данных в базу данных (симуляция)"""
     import pandas as pd
     df = pd.read_csv('/opt/airflow/data/output/transformed_data.csv')
     
     # В реальном сценарии здесь был бы код для загрузки в базу данных
     # Для учебных целей просто логируем
-    print(f"Загружено в базу данных: {len(df)} записей")
+    print(f"Имитация загрузки: подготовлено {len(df)} записей. Записи в БД нет.")
     
     # Создаем SQL для создания таблицы (в реальном сценарии)
     create_table_sql = """
@@ -185,8 +184,8 @@ transform_task = PythonOperator(
 )
 
 load_task = PythonOperator(
-    task_id='load_to_database',
-    python_callable=load_to_database,
+    task_id='simulate_load',
+    python_callable=simulate_load,
     dag=dag
 )
 

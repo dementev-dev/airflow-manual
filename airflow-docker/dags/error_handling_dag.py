@@ -1,108 +1,89 @@
+"""Повторы и обработчики результата. Режим задается Variable error_mode.
+
+retry_once: вторая задача падает при первой попытке, затем выполняется.
+success: обе задачи выполняются сразу.
+fail_first / fail_second / fail_both: выбранные задачи падают при каждой попытке.
+Меняйте режим после завершения предыдущего запуска.
 """
-DAG для демонстрации обработки ошибок в Airflow
-Уровень: Продвинутый
-"""
+import logging
 from datetime import datetime, timedelta
+
 from airflow import DAG
+from airflow.models import Variable
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
-from airflow.models.baseoperator import chain
-import random
 
-# Определение DAG
-default_args = {
-    'owner': 'student',
-    'depends_on_past': False,
-    'start_date': datetime(2023, 1, 1),
-    'email_on_failure': False,  # Отключаем email уведомления для простоты
-    'email_on_retry': False,
-    'retries': 3,  # Количество попыток при ошибке
-    'retry_delay': timedelta(seconds=10)  # Задержка между попытками
-}
 
-dag = DAG(
-    'error_handling_dag',
-    default_args=default_args,
-    description='DAG для изучения обработки ошибок в Airflow',
-    schedule_interval=None,
+def get_error_mode():
+    """Читает режим во время выполнения задачи."""
+    mode = Variable.get("error_mode", default_var="retry_once")
+    if mode not in {"success", "retry_once", "fail_first", "fail_second", "fail_both"}:
+        raise ValueError(f"Неизвестный error_mode: {mode}")
+    return mode
+
+
+def run_first_task():
+    """Имитирует первую рабочую задачу."""
+    if get_error_mode() in {"fail_first", "fail_both"}:
+        raise ValueError("Учебная ошибка первой задачи")
+    logging.info("Первая задача выполнена")
+
+
+def run_retry_task(ti):
+    """Имитирует временную или постоянную ошибку второй задачи."""
+    mode = get_error_mode()
+    logging.info("Режим: %s; попытка: %s", mode, ti.try_number)
+    if mode in {"fail_second", "fail_both"}:
+        raise ValueError("Постоянная учебная ошибка второй задачи")
+    if mode == "retry_once" and ti.try_number == 1:
+        raise ValueError("Временная учебная ошибка: следующая попытка выполнится")
+    logging.info("Вторая задача выполнена")
+
+
+def handle_success():
+    """Сообщает об успехе обеих рабочих задач."""
+    logging.info("Обе рабочие задачи выполнены")
+
+
+def handle_failure():
+    """Сообщает об окончательном отказе хотя бы одной задачи."""
+    logging.error("Рабочая задача исчерпала повторы. Откройте ее лог")
+
+
+with DAG(
+    "error_handling_dag",
+    start_date=datetime(2023, 1, 1),
+    schedule=None,
     catchup=False,
-    tags=['educational', 'error_handling', 'advanced']
-)
+    default_args={
+        "owner": "student",
+        "retries": 1,
+        "retry_delay": timedelta(seconds=10),
+    },
+    tags=["educational", "errors"],
+) as dag:
+    start_task = EmptyOperator(task_id="start_task")
+    unreliable_task = PythonOperator(
+        task_id="unreliable_task", python_callable=run_first_task,
+    )
+    retry_task = PythonOperator(
+        task_id="retry_task", python_callable=run_retry_task,
+    )
+    success_handler_task = PythonOperator(
+        task_id="success_handler",
+        python_callable=handle_success,
+        trigger_rule="all_success",
+        retries=0,
+    )
+    failure_handler_task = PythonOperator(
+        task_id="failure_handler",
+        python_callable=handle_failure,
+        trigger_rule="one_failed",
+        retries=0,
+    )
 
-def unreliable_task():
-    """Задача, которая может завершиться с ошибкой"""
-    # В реальном сценарии это может быть задача, зависящая от внешних факторов
-    # Для учебных целей случайным образом генерируем ошибку
-    if random.random() < 0.3:  # 30% вероятность ошибки
-        print("Ошибка: задача не выполнена успешно!")
-        raise Exception("Случайная ошибка в задаче")
-
-    print("Задача выполнена успешно!")
-    return "Задача выполнена"
-
-def success_handler():
-    """Обработчик успешного выполнения"""
-    print("Поздравляем! Все задачи выполнены успешно!")
-    return "Успешно завершено"
-
-def failure_handler():
-    """Обработчик ошибок"""
-    print("Одна или несколько задач завершились с ошибкой!")
-    print("Проверьте логи для получения дополнительной информации")
-    return "Ошибка обработана"
-
-def retry_task():
-    """Задача с механизмом повторных попыток"""
-    # Имитируем задачу, которая может завершиться с ошибкой, но со временем исправляется
-    import time
-    time.sleep(2)  # Имитация работы
-
-    # С вероятностью 50% задача завершится с ошибкой
-    if random.random() < 0.5:
-        print("Ошибка в retry_task!")
-        raise Exception("Ошибка в задаче с повторными попытками")
-
-    print("retry_task выполнена успешно!")
-    return "retry_task завершена"
-
-# Определение задач
-start_task = DummyOperator(
-    task_id='start_task',
-    dag=dag
-)
-
-unreliable_task = PythonOperator(
-    task_id='unreliable_task',
-    python_callable=unreliable_task,
-    dag=dag
-)
-
-retry_task = PythonOperator(
-    task_id='retry_task',
-    python_callable=retry_task,
-    dag=dag
-)
-
-success_handler_task = PythonOperator(
-    task_id='success_handler',
-    python_callable=success_handler,
-    trigger_rule='all_success',  # Выполняется только если все предыдущие задачи успешны
-    dag=dag
-)
-
-failure_handler_task = PythonOperator(
-    task_id='failure_handler',
-    python_callable=failure_handler,
-    trigger_rule='one_failed',  # Выполняется если хотя бы одна предыдущая задача завершилась с ошибкой
-    dag=dag
-)
-
-end_task = DummyOperator(
-    task_id='end_task',
-    dag=dag
-)
-
-# Установка зависимостей
-# Используем chain, чтобы наглядно показать ученикам построение ветвящихся зависимостей без ручного перечисления операторов.
-chain(start_task, [unreliable_task, retry_task], [success_handler_task, failure_handler_task], end_task)
-
+    start_task >> [unreliable_task, retry_task]
+    [unreliable_task, retry_task] >> success_handler_task
+    [unreliable_task, retry_task] >> failure_handler_task
+    # Оба обработчика завершающие. При отказе success_handler получает
+    # upstream_failed, поэтому успешное уведомление не скрывает ошибку DAG Run.

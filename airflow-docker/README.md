@@ -1,273 +1,105 @@
-# Educational Airflow Setup for Beginners
+# Учебный стенд Apache Airflow
 
-Простой учебный стенд Apache Airflow для начинающих, изучающих SQL и Python.
+Стенд содержит Airflow 2.9.2, учебную PostgreSQL и девять DAG. Он нужен для знакомства с инструментом: запустить пример, изменить его и посмотреть результат. Для работы понадобятся Docker с Compose, браузер и знания Python, pandas и SQL.
 
-## 🎯 Цель проекта
+## Запуск
 
-Создать максимально простую среду для изучения Apache Airflow.
-Для удобства все переменные окружения захардкожены в docker скрипты. На проде так делать не надо :)
-
-## 📋 Предварительные требования
-
-- Docker и Docker Compose
-- Базовые знания Python и SQL
-- Веб-браузер для доступа к интерфейсу Airflow
-
-## 🚀 Быстрый старт
-
-### 1. Запуск стенда
+Из корня репозитория:
 
 ```bash
-# Перейдите в директорию проекта
 cd airflow-docker
-
-# Запустите все сервисы
-docker-compose up -d
+docker compose up -d --build
 ```
 
-### 2. Доступ к интерфейсам
+Команды подходят для Linux и PowerShell в Windows. При первом запуске Docker собирает образ, поднимает две БД, выполняет `airflow-init`, затем запускает webserver и scheduler. Инициализация создает учетную запись и подключение `postgres_training`.
 
-- **Airflow UI**: http://localhost:8080
-  - Логин: `admin`
-  - Пароль: `admin`
+Проверьте состояние:
 
-- **PostgreSQL для тренировок**: `localhost:5432`
-  - База данных: `training`
-  - Пользователь: `student`
-  - Пароль: `student`
-
-- **PostgreSQL для метаданных Airflow**: `localhost:5434`
-  - База данных: `airflow`
-  - Пользователь: `airflow`
-  - Пароль: `airflow`
-
-## 🏗️ Архитектура стенда
-
-```mermaid
-graph LR
-
-    %% Локальная файловая система
-    subgraph local["Локальная файловая система"]
-        dags["Каталог<br/>Educational DAGs"]
-        fs["Local Filesystem"]
-        dags --> fs
-    end
-
-    %% Docker-контейнеры
-    subgraph docker["Контейнеры Docker"]
-        subgraph airflow["Airflow"]
-            ws["Airflow Webserver"]
-            sch["Airflow Scheduler"]
-            meta["PostgreSQL Metadata"]
-            sch --> meta
-            ws --> meta
-        end
-
-        subgraph training["Учебная БД"]
-            train["PostgreSQL Training"]
-        end
-    end
-
-    %% Клиенты
-    subgraph clients["Клиенты"]
-        user["Пользователь<br/>(браузер)"]
-        sql["SQL клиент"]
-    end
-
-    %% Монтирование DAG'ов в контейнеры Airflow
-    dags -. "том с DAG-файлами" .- ws
-    dags -. "том с DAG-файлами" .- sch
-
-    %% Airflow-задачи работают с учебной БД
-    sch -- "задачи DAG" --> train
-
-    %% Внешние подключения
-    user -- "порт 8080" --> ws
-    sql -- "порт 5432" --> train
+```bash
+docker compose ps -a
+docker compose logs airflow-init
 ```
 
-## 📁 Структура проекта
+Завершение `airflow-init` с кодом 0 нормально: это разовая подготовка. Остальные четыре сервиса должны работать. Откройте http://localhost:8080 и войдите как `admin` / `admin`.
 
-```
+| Сервис | Адрес с компьютера | База | Пользователь / пароль |
+|---|---|---|---|
+| Airflow UI | `http://localhost:8080` | - | `admin` / `admin` |
+| Учебная PostgreSQL | `localhost:5432` | `training` | `student` / `student` |
+| Метаданные Airflow | `localhost:5434` | `airflow` | `airflow` / `airflow` |
+
+В задачах используется адрес `postgres-training:5432`: это имя сервиса внутри Docker. Базу метаданных для упражнений не используйте. Учебные пароли заданы в Compose; для публичного сервера такая конфигурация не подходит.
+
+## Прохождение практики
+
+Откройте [задания](../educational-tasks.md). Их восемь блоков проходят последовательно; перед каждым указаны нужные главы [учебника](../README.md), исходные файлы и настройки.
+
+Основные задания внутри блока сохраняют изменения предыдущих шагов. Дополнительные находятся в конце блока и помечены "По желанию"; их можно пропустить. Для завершения практики достаточно основных заданий и проверки их результатов.
+
+| Блок | DAG |
+|---|---|
+| [Первый DAG](../educational-tasks.md#first-dag) | `hello_world_dag` |
+| [SQL и подключения](../educational-tasks.md#sql) | `sql_basic_dag` |
+| [Работа с файлами](../educational-tasks.md#files) | `file_operations_dag` |
+| [Загрузка CSV и DQ](../educational-tasks.md#load-dq) | `csv_to_postgres`, `csv_to_postgres_dq` |
+| [Разбор ETL](../educational-tasks.md#etl) | `data_processing_dag` |
+| [Ветвление](../educational-tasks.md#branching) | `branching_dag` |
+| [Ошибки и повторы](../educational-tasks.md#errors) | `error_handling_dag` |
+| [Пулы, XCom и TaskGroup](../educational-tasks.md#resources) | `resource_management_dag` |
+
+Описание поведения исходных примеров находится в [справочнике DAG](dag-specifications.md). Почта нужна только для отдельного задания по желанию; SMTP в стенде не настроен.
+
+## Файлы и данные
+
+```text
 airflow-docker/
-├── docker-compose.yml          # Конфигурация Docker
-├── .env                        # Файл не используется: переменные заданы в docker-compose.yml
-├── dags/                       # DAG файлы для обучения
-│   ├── hello_world_dag.py      # Базовый пример
-│   ├── sql_basic_dag.py        # Работа с SQL
-│   ├── file_operations_dag.py  # Обработка файлов
-│   ├── csv_to_postgres.py      # Загрузка CSV в Postgres (ETL)
-│   ├── csv_to_postgres_dq.py   # Проверки качества данных (DQ)
-│   ├── data_processing_dag.py  # Сложный ETL пайплайн
-│   ├── branching_dag.py        # Условная логика
-│   └── error_handling_dag.py   # Обработка ошибок
-├── data/                       # Данные и артефакты прогонов
-│   ├── input/                  # Входные данные
-│   └── output/                 # Сгенерированные CSV, отчеты и результаты обработки
-├── logs/                       # Логи Airflow
-├── README.md                   # Эта инструкция
-└── educational-tasks.md        # Практические задания для студентов
+├── docker-compose.yml       # Сервисы, порты и учебные подключения
+├── Dockerfile               # Airflow 2.9.2
+├── requirements.txt         # Дополнительные Python-пакеты
+├── dags/                    # Девять учебных DAG
+├── data/input/              # Входные CSV и данные упражнений
+├── data/output/             # Результаты задач
+└── init-postgres.sql        # Начальная подготовка учебной БД
 ```
 
-## 🎓 Учебные материалы
+`dags/` и `data/` смонтированы в контейнеры как `/opt/airflow/dags/` и `/opt/airflow/data/`. Правки DAG подхватываются планировщиком; перед новым запуском дождитесь обновления вкладки Code. Резервные копии Python-файлов храните вне `dags/`, чтобы не создать два определения одного `dag_id`.
 
-### Основы Airflow
+Таблицы PostgreSQL сохраняются в именованных томах `pg_data` и `pgmeta`. Обычная остановка их не удаляет. Логи Airflow хранятся внутри контейнеров; важные логи опыта сохраните до удаления контейнеров.
 
-**Цели:**
-- Понимание структуры DAG
-- Создание простых задач
-- Настройка зависимостей между задачами
-
-**Примеры DAG:**
-- `hello_world_dag.py` - базовые операторы Python
-- `sql_basic_dag.py` - работа с базами данных
-
-### Интеграция с данными
-
-**Цели:**
-- Подключение к PostgreSQL
-- Выполнение SQL запросов
-- Обработка файлов CSV
-
-**Примеры DAG:**
-- `file_operations_dag.py` - работа с файлами
-- `csv_to_postgres.py` - загрузка данных из CSV в PostgreSQL
-- `csv_to_postgres_dq.py` - автоматизированные проверки качества (Data Quality)
-- `data_processing_dag.py` - ETL процессы
-
-### Продвинутые возможности
-
-**Цели:**
-- Условное выполнение задач
-- Обработка ошибок
-- Параметризация workflows
-
-**Примеры DAG:**
-- `branching_dag.py` - условная логика
-- `error_handling_dag.py` - обработка ошибок
-
-##  🎯 Практические задания
-
-Для закрепления знаний по каждому DAG мы подготовили практические задания разного уровня сложности:
-
-### 📋 Учебные задания
-
-В файле **[educational-tasks.md](educational-tasks.md)** вы найдете детальные задания для каждого DAG:
-
--  🌱 **Начальный уровень**: Базовые задачи по созданию и настройке DAG'ов
--  📚 **Средний уровень**: Работа с данными, файлами и SQL операциями
--  🚀 **Продвинутый уровень**: ETL процессы, ветвление, обработка ошибок
-
-###  🎓 Рекомендуемый путь обучения
-
-1. **Начните с `hello_world_dag.py`** - освоите основы Airflow
-2. **Перейдите к `sql_basic_dag.py`** - изучите работу с базами данных
-3. **Попрактикуйтесь на `file_operations_dag.py`** - работа с файлами
-4. **Освойте ETL и DQ на `csv_to_postgres.py` и `csv_to_postgres_dq.py`** - загрузка и валидация данных
-5. **Разберите сложный ETL на `data_processing_dag.py`** - обработка данных
-6. **Изучите продвинутые темы** - ветвление и обработка ошибок
-
-Каждое задание содержит:
-- Цель и сложность выполнения
-- Конкретные требования к модификации кода
-- Ожидаемый результат
-- Время на выполнение
-
-## 🔧 Технические детали
-
-### Переменные окружения
-
-В этом проекте мы не используем `.env`: все значения заданы напрямую в `docker-compose.yml`.
-
-Сервисы Airflow получают:
-- `POSTGRES_TRAINING_HOST=postgres-training`
-- `POSTGRES_TRAINING_PORT=5432`
-- `POSTGRES_TRAINING_DB=training`
-- `POSTGRES_TRAINING_USER=student`
-- `POSTGRES_TRAINING_PASSWORD=student`
-- `AIRFLOW_CONN_POSTGRES_TRAINING=postgresql://student:student@postgres-training:5432/training`
-
-`docker-compose run --rm airflow-init` запускает `airflow connections add postgres_training`, поэтому соединение доступно сразу после инициализации. Проверить наличие можно через:
+Для SQL-запросов из заданий:
 
 ```bash
-docker-compose exec airflow-webserver airflow connections get postgres_training
+docker compose exec postgres-training psql -U student -d training
 ```
 
-`csv_to_postgres.py` по умолчанию складывает сгенерированные CSV в `/opt/airflow/data/output`, то есть в локальный каталог `airflow-docker/data/output/`.
+Выход из psql - `\q`. Готовое подключение Airflow можно проверить командой:
 
-
-### Порты
-
-- `8080` - Airflow Webserver
-- `5432` - PostgreSQL для тренировок
-- `5434` - PostgreSQL для метаданных Airflow
-
-## 🛠️ Управление стендом
-
-### Запуск сервисов
 ```bash
-docker-compose up -d
+docker compose exec airflow-webserver airflow connections get postgres_training
 ```
 
-### Остановка сервисов
+## Управление и поиск ошибок
+
+Все команды ниже выполняются из `airflow-docker`.
+
 ```bash
-docker-compose down
+docker compose exec airflow-webserver airflow version
+docker compose exec airflow-webserver airflow dags list
+docker compose exec airflow-webserver airflow dags list-import-errors
+docker compose logs airflow-scheduler
+docker compose logs airflow-webserver
 ```
 
-### Просмотр логов
+Если DAG не появился, проверьте путь файла и ошибки импорта. Если задача упала, сначала откройте ее лог в UI. При ошибке подключения проверьте `docker compose ps` и Conn Id задачи. Задачи из блока 8 ждут, пока вы создадите указанный в задании пул.
+
+Остановка с сохранением данных:
+
 ```bash
-# Логи Airflow
-docker-compose logs airflow-webserver
-docker-compose logs airflow-scheduler
-
-# Логи PostgreSQL
-docker-compose logs postgres-training
-docker-compose logs postgres-metadata
+docker compose down
 ```
 
-### Перезапуск конкретного сервиса
-```bash
-docker-compose restart airflow-webserver
-```
+Повторный запуск - `docker compose up -d`. Для полного сброса обеих БД используйте `docker compose down -v`: эта команда удалит учебные таблицы, историю запусков и настройки Airflow в томах. Файлы в `data/` останутся.
 
-## 🐛 Решение проблем
+## Для авторов курса
 
-### DAG не появляется в интерфейсе
-- Проверьте, что файл находится в папке `dags/`
-- Убедитесь в правильности синтаксиса Python
-- Проверьте логи планировщика: `docker-compose logs airflow-scheduler`
-
-### Ошибки подключения к базе данных
-- Убедитесь, что PostgreSQL запущен: `docker-compose ps`
-- Проверьте логи PostgreSQL: `docker-compose logs postgres-training`
-
-### Задачи завершаются с ошибкой
-- Проверьте логи задачи в интерфейсе Airflow
-- Убедитесь в наличии необходимых Python пакетов
-
-## 📚 Дополнительные ресурсы
-
-- [Официальная документация Airflow](https://airflow.apache.org/docs/)
-- [Учебные материалы в родительской папке](../)
-- [Практические задания для студентов](educational-tasks.md)
-
----
-
-##  🌟 Начало работы с заданиями
-
-После запуска стенда Airflow, откройте файл [educational-tasks.md](educational-tasks.md) и выберите задание, соответствующее вашему уровню подготовки. Каждое задание содержит подробные инструкции и ожидаемые результаты.
-
-**Быстрый старт с заданиями:**
-```bash
-# Запустите стенд
-docker-compose up -d
-
-# Откройте задания в браузере или редакторе
-# И следуйте инструкциям из educational-tasks.md
-```
-
-Удачи в изучении Apache Airflow!
-
----
-
-**Примечание**: Этот стенд предназначен исключительно для учебных целей. Для production использования требуется дополнительная настройка безопасности.
+[План обновления практики](../docs/specs/2026-09-28-practice-improvement-plan.md) сохраняет согласованные решения, разбор исходных заданий и результаты проверок.

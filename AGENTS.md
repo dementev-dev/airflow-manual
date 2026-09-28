@@ -11,6 +11,9 @@ This repository contains an educational manual for Apache Airflow with runnable 
   - `data/`: sample input data for exercises.
 - Note: `airflow-docker/AGENTS.md` adds extra, folder-specific guidance and takes precedence there.
 
+## Practice Improvement Work
+При переработке практических заданий, учебного поведения DAG или маршрута курса сначала прочитайте [план обновления практики](docs/specs/2026-09-28-practice-improvement-plan.md): согласованные решения, текущий этап и критерии его завершения.
+
 ## Build, Test, and Development Commands
 Prerequisite: Docker + Docker Compose.
 - Build images: `cd airflow-docker && docker-compose build`
