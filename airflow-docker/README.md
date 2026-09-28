@@ -32,20 +32,20 @@ docker compose logs airflow-init
 
 ## Прохождение практики
 
-Откройте [задания](educational-tasks.md). Их восемь блоков проходят последовательно; перед каждым указаны нужные главы [учебника](../README.md), исходные файлы и настройки.
+Откройте [задания](../educational-tasks.md). Их восемь блоков проходят последовательно; перед каждым указаны нужные главы [учебника](../README.md), исходные файлы и настройки.
 
 Основные задания внутри блока сохраняют изменения предыдущих шагов. Дополнительные находятся в конце блока и помечены "По желанию"; их можно пропустить. Для завершения практики достаточно основных заданий и проверки их результатов.
 
 | Блок | DAG |
 |---|---|
-| [Первый DAG](educational-tasks.md#first-dag) | `hello_world_dag` |
-| [SQL и подключения](educational-tasks.md#sql) | `sql_basic_dag` |
-| [Работа с файлами](educational-tasks.md#files) | `file_operations_dag` |
-| [Загрузка CSV и DQ](educational-tasks.md#load-dq) | `csv_to_postgres`, `csv_to_postgres_dq` |
-| [Разбор ETL](educational-tasks.md#etl) | `data_processing_dag` |
-| [Ветвление](educational-tasks.md#branching) | `branching_dag` |
-| [Ошибки и повторы](educational-tasks.md#errors) | `error_handling_dag` |
-| [Пулы, XCom и TaskGroup](educational-tasks.md#resources) | `resource_management_dag` |
+| [Первый DAG](../educational-tasks.md#first-dag) | `hello_world_dag` |
+| [SQL и подключения](../educational-tasks.md#sql) | `sql_basic_dag` |
+| [Работа с файлами](../educational-tasks.md#files) | `file_operations_dag` |
+| [Загрузка CSV и DQ](../educational-tasks.md#load-dq) | `csv_to_postgres`, `csv_to_postgres_dq` |
+| [Разбор ETL](../educational-tasks.md#etl) | `data_processing_dag` |
+| [Ветвление](../educational-tasks.md#branching) | `branching_dag` |
+| [Ошибки и повторы](../educational-tasks.md#errors) | `error_handling_dag` |
+| [Пулы, XCom и TaskGroup](../educational-tasks.md#resources) | `resource_management_dag` |
 
 Описание поведения исходных примеров находится в [справочнике DAG](dag-specifications.md). Почта нужна только для отдельного задания по желанию; SMTP в стенде не настроен.
 
@@ -59,8 +59,7 @@ airflow-docker/
 ├── dags/                    # Девять учебных DAG
 ├── data/input/              # Входные CSV и данные упражнений
 ├── data/output/             # Результаты задач
-├── init-postgres.sql        # Начальная подготовка учебной БД
-└── educational-tasks.md     # Маршрут и условия заданий
+└── init-postgres.sql        # Начальная подготовка учебной БД
 ```
 
 `dags/` и `data/` смонтированы в контейнеры как `/opt/airflow/dags/` и `/opt/airflow/data/`. Правки DAG подхватываются планировщиком; перед новым запуском дождитесь обновления вкладки Code. Резервные копии Python-файлов храните вне `dags/`, чтобы не создать два определения одного `dag_id`.
